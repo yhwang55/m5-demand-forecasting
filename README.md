@@ -1,12 +1,10 @@
 # M5 Demand Forecasting
 
-M5 Forecasting (Walmart 5년치 일별 판매) 데���터 기반 수요예측 프로젝트 스켈레톤입니다.  
+M5 Forecasting (Walmart 5년치 일별 판매) 데이터 기반 수요예측 프로젝트 스켈레톤입니다.  
 Baseline + LightGBM + Prophet 모델을 포함하며, 노트북 단계별 구성과 성능 비교, 가격 탄력성 분석, Streamlit 대시보드 MVP를 제공합니다.
 
 ## Live Demo (Streamlit Cloud)
-> 아래 URL을 **Streamlit Cloud 배포 후** 실제 주소로 교체하세요.
-
-[![Launch App](https://img.shields.io/badge/Streamlit-Launch%20App-brightgreen)](https://share.streamlit.io/<your-username>/m5-demand-forecasting/main/app/streamlit_app.py)
+[![Launch App](https://img.shields.io/badge/Streamlit-Launch%20App-brightgreen)](https://m5-demand-forecasting-project.streamlit.app/)
 
 ## Quickstart (1분 실행)
 ```bash
