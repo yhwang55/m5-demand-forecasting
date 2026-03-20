@@ -3,6 +3,15 @@
 M5 Forecasting (Walmart 5년치 일별 판매) 데이터 기반 수요예측 프로젝트 스켈레톤입니다.  
 Baseline + LightGBM + Prophet 모델을 포함하며, 노트북 단계별 구성과 성능 비교, 가격 탄력성 분석, Streamlit 대시보드 MVP를 제공합니다.
 
+## Quickstart (1분 실행)
+```bash
+pip install -r requirements.txt
+python scripts/train_baseline.py
+streamlit run app/streamlit_app.py
+```
+
+> 위 Quickstart는 이미 포함된 **합성 샘플 CSV**로 즉시 실행됩니다.
+
 ## 프로젝트 구조
 ```
 M5 Demand Forecasting/
