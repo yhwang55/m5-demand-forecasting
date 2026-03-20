@@ -12,8 +12,10 @@ if str(ROOT) not in sys.path:
 
 from src.data import load_sample_sales, load_sample_prices
 
+st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
+
 st.title("M5 Demand Forecasting MVP")
-st.caption("Demo: model selection + prediction overlay (lightweight) on sample CSV")
+st.caption("Portfolio demo: model selection, KPIs, and prediction overlay on sample data")
 
 sales = load_sample_sales()
 prices = load_sample_prices()
@@ -21,16 +23,16 @@ prices = load_sample_prices()
 store_ids = sorted(sales["store_id"].unique())
 item_ids = sorted(sales["item_id"].unique())
 
-store = st.selectbox("Store", store_ids)
-item = st.selectbox("Item", item_ids)
-model_choice = st.selectbox("Model", ["Baseline", "LightGBM (demo)", "Prophet (demo)"])
+with st.sidebar:
+    st.header("Filters")
+    store = st.selectbox("Store", store_ids)
+    item = st.selectbox("Item", item_ids)
+    model_choice = st.selectbox("Model", ["Baseline", "LightGBM (demo)", "Prophet (demo)"])
 
 filtered = sales[(sales["store_id"] == store) & (sales["item_id"] == item)].copy()
 filtered = filtered.sort_values("date")
 price_row = prices[(prices["store_id"] == store) & (prices["item_id"] == item)]
 price = price_row["price"].iloc[0] if not price_row.empty else None
-
-st.metric("Price", price if price is not None else 0)
 
 # Lightweight demo prediction for portfolio UX (fast + zero training)
 if model_choice == "Baseline":
@@ -40,8 +42,44 @@ elif model_choice.startswith("LightGBM"):
 else:
     filtered["prediction"] = filtered["sales"].rolling(window=5, min_periods=1).mean()
 
-plot_df = filtered.melt(id_vars=["date"], value_vars=["sales", "prediction"], var_name="series", value_name="value")
-fig = px.line(plot_df, x="date", y="value", color="series", title="Actual vs Prediction")
+avg_sales = float(filtered["sales"].mean()) if not filtered.empty else 0.0
+latest_sales = float(filtered["sales"].iloc[-1]) if not filtered.empty else 0.0
+mae = float((filtered["sales"] - filtered["prediction"]).abs().mean()) if not filtered.empty else 0.0
+
+kpi_cols = st.columns(4)
+kpi_cols[0].metric("Price", price if price is not None else 0)
+kpi_cols[1].metric("Avg Sales", f"{avg_sales:,.1f}")
+kpi_cols[2].metric("Latest Sales", f"{latest_sales:,.1f}")
+kpi_cols[3].metric("Prediction MAE", f"{mae:,.2f}")
+
+st.markdown("### Sales Forecast View")
+plot_df = filtered.melt(
+    id_vars=["date"],
+    value_vars=["sales", "prediction"],
+    var_name="series",
+    value_name="value",
+)
+fig = px.line(
+    plot_df,
+    x="date",
+    y="value",
+    color="series",
+    title="Actual vs Prediction",
+    labels={"value": "Sales", "series": "Series"},
+)
+fig.update_layout(legend_title_text="")
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("MVP: Filter + Actual vs Prediction + KPI")
+with st.expander("Model Summary"):
+    st.markdown(
+        """
+        **Baseline**: Expanding mean of historical sales.\n
+        **LightGBM (demo)**: 3-day rolling mean to illustrate short-term smoothing.\n
+        **Prophet (demo)**: 5-day rolling mean to emulate trend smoothing.\n        *Note: These are lightweight demo predictions for UX; replace with trained models for production.*
+        """
+    )
+
+with st.expander("Data Snapshot"):
+    st.dataframe(filtered.head(10), use_container_width=True)
+
+st.caption("MVP: Filter + Actual vs Prediction + KPIs + Summary")
