@@ -1,6 +1,15 @@
+import sys
+from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
+# Ensure repo root is on PYTHONPATH for Streamlit Cloud
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
 from src.data import load_sample_sales, load_sample_prices
 
 st.title("M5 Demand Forecasting MVP")
