@@ -13,6 +13,8 @@ KAGGLE_REQUIRED_FILES = [
     KAGGLE_DATA_DIR / "sell_prices.csv",
 ]
 
+KAGGLE_LAST_ERROR = None
+
 def load_sample_sales():
     return pd.read_csv(SAMPLE_DATA_DIR / "sales_sample.csv")
 
@@ -26,18 +28,32 @@ def _kaggle_creds_available():
     return bool(os.getenv("KAGGLE_USERNAME")) and bool(os.getenv("KAGGLE_KEY"))
 
 def ensure_kaggle_dataset():
+    global KAGGLE_LAST_ERROR
+    KAGGLE_LAST_ERROR = None
     if all(path.exists() for path in KAGGLE_REQUIRED_FILES):
         return True
     if not _kaggle_creds_available():
+        KAGGLE_LAST_ERROR = "Missing KAGGLE_USERNAME or KAGGLE_KEY"
         return False
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
     try:
         api = KaggleApi()
         api.authenticate()
         api.dataset_download_files(KAGGLE_DATASET, path=RAW_DATA_DIR, unzip=True, quiet=True)
-    except Exception:
+    except Exception as exc:
+        KAGGLE_LAST_ERROR = f"{type(exc).__name__}: {exc}"
         return False
-    return all(path.exists() for path in KAGGLE_REQUIRED_FILES)
+    if not all(path.exists() for path in KAGGLE_REQUIRED_FILES):
+        KAGGLE_LAST_ERROR = "Download completed but expected files are missing."
+        return False
+    return True
+
+def get_kaggle_debug_status():
+    return {
+        "creds_available": _kaggle_creds_available(),
+        "required_files_present": all(path.exists() for path in KAGGLE_REQUIRED_FILES),
+        "last_error": KAGGLE_LAST_ERROR,
+    }
 
 def load_kaggle_sales_long(max_stores=3, max_items=20, last_n_days=365):
     sales = pd.read_csv(KAGGLE_DATA_DIR / "sales_train_validation.csv")
