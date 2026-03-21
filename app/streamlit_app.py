@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from src.data import (
     ensure_kaggle_dataset,
+    get_kaggle_debug_status,
     load_kaggle_prices_latest,
     load_kaggle_sales_long,
     load_sample_prices,
@@ -40,6 +41,7 @@ item_ids = sorted(sales["item_id"].unique())
 
 kaggle_username = os.getenv("KAGGLE_USERNAME")
 kaggle_key = os.getenv("KAGGLE_KEY")
+kaggle_status = get_kaggle_debug_status()
 
 def _mask_secret(value: str | None) -> str:
     if not value:
@@ -47,7 +49,6 @@ def _mask_secret(value: str | None) -> str:
     if len(value) <= 4:
         return "***"
     return f"{value[:2]}***{value[-2:]}"
-
 
 with st.sidebar:
     st.header("Filters")
@@ -60,6 +61,8 @@ with st.sidebar:
         st.write("KAGGLE_KEY set:", bool(kaggle_key))
         st.write("KAGGLE_KEY (masked):", _mask_secret(kaggle_key))
         st.write("Kaggle dataset ready:", use_kaggle)
+        st.write("Required files present:", kaggle_status["required_files_present"])
+        st.write("Last error:", kaggle_status["last_error"])
 
 filtered = sales[(sales["store_id"] == store) & (sales["item_id"] == item)].copy()
 filtered = filtered.sort_values("date")
@@ -104,11 +107,11 @@ st.plotly_chart(fig, use_container_width=True)
 
 with st.expander("Model Summary"):
     st.markdown(
-        """
+        '''
         **Baseline**: Expanding mean of historical sales.\n
         **LightGBM (demo)**: 3-day rolling mean to illustrate short-term smoothing.\n
         **Prophet (demo)**: 5-day rolling mean to emulate trend smoothing.\n        *Note: These are lightweight demo predictions for UX; replace with trained models for production.*
-        """
+        '''
     )
 
 with st.expander("Data Snapshot"):
