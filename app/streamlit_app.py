@@ -10,15 +10,29 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
-from src.data import load_sample_sales, load_sample_prices
+from src.data import (
+    ensure_kaggle_dataset,
+    load_kaggle_prices_latest,
+    load_kaggle_sales_long,
+    load_sample_prices,
+    load_sample_sales,
+)
 
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
 st.title("M5 Demand Forecasting MVP")
 st.caption("Portfolio demo: model selection, KPIs, and prediction overlay on sample data")
 
-sales = load_sample_sales()
-prices = load_sample_prices()
+use_kaggle = ensure_kaggle_dataset()
+
+if use_kaggle:
+    sales = load_kaggle_sales_long()
+    prices = load_kaggle_prices_latest()
+    st.success("Using Kaggle M5 dataset (cached)")
+else:
+    sales = load_sample_sales()
+    prices = load_sample_prices()
+    st.info("Using sample dataset (Kaggle API key required for full data)")
 
 store_ids = sorted(sales["store_id"].unique())
 item_ids = sorted(sales["item_id"].unique())
