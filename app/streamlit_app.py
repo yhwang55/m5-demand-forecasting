@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -37,11 +38,28 @@ else:
 store_ids = sorted(sales["store_id"].unique())
 item_ids = sorted(sales["item_id"].unique())
 
+kaggle_username = os.getenv("KAGGLE_USERNAME")
+kaggle_key = os.getenv("KAGGLE_KEY")
+
+def _mask_secret(value: str | None) -> str:
+    if not value:
+        return "(not set)"
+    if len(value) <= 4:
+        return "***"
+    return f"{value[:2]}***{value[-2:]}"
+
+
 with st.sidebar:
     st.header("Filters")
     store = st.selectbox("Store", store_ids)
     item = st.selectbox("Item", item_ids)
     model_choice = st.selectbox("Model", ["Baseline", "LightGBM (demo)", "Prophet (demo)"])
+    with st.expander("Kaggle Debug"):
+        st.write("KAGGLE_USERNAME set:", bool(kaggle_username))
+        st.write("KAGGLE_USERNAME (masked):", _mask_secret(kaggle_username))
+        st.write("KAGGLE_KEY set:", bool(kaggle_key))
+        st.write("KAGGLE_KEY (masked):", _mask_secret(kaggle_key))
+        st.write("Kaggle dataset ready:", use_kaggle)
 
 filtered = sales[(sales["store_id"] == store) & (sales["item_id"] == item)].copy()
 filtered = filtered.sort_values("date")
