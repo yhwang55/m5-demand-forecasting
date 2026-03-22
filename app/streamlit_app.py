@@ -54,6 +54,28 @@ def _mask_secret(value: str | None) -> str:
     return f"{value[:2]}***{value[-2:]}"
 
 
+def _format_store(store_id: str) -> str:
+    if not store_id:
+        return "(unknown store)"
+    parts = store_id.split("_")
+    if len(parts) == 2:
+        state, store_num = parts
+        return f"{store_id} (State {state}, Store {store_num})"
+    return store_id
+
+
+def _format_item(item_id: str) -> str:
+    if not item_id:
+        return "(unknown item)"
+    parts = item_id.split("_")
+    if len(parts) >= 3:
+        category = parts[0]
+        dept = parts[1]
+        item_num = "_".join(parts[2:])
+        return f"{item_id} (Category {category}, Dept {dept}, Item {item_num})"
+    return item_id
+
+
 def _build_lag_features(series: pd.Series) -> pd.DataFrame:
     df = pd.DataFrame({"sales": series})
     df["lag_1"] = df["sales"].shift(1)
@@ -95,10 +117,11 @@ def _forecast_lightgbm(model: LGBMRegressor, history: pd.Series, horizon: int) -
 
 with st.sidebar:
     st.header("Filters")
-    store = st.selectbox("Store", store_ids)
-    item = st.selectbox("Item", item_ids)
+    store = st.selectbox("Store", store_ids, format_func=_format_store)
+    item = st.selectbox("Item", item_ids, format_func=_format_item)
     forecast_days = st.slider("Forecast horizon (days)", min_value=7, max_value=90, value=28)
     model_choice = st.selectbox("Model", ["Baseline", "LightGBM (trained)"])
+    st.caption("Store/Item labels are decoded for readability; the IDs are the canonical Kaggle keys.")
     with st.expander("Kaggle Debug"):
         st.write("KAGGLE_USERNAME set:", bool(kaggle_username))
         st.write("KAGGLE_USERNAME (masked):", _mask_secret(kaggle_username))
@@ -186,8 +209,7 @@ st.plotly_chart(fig, use_container_width=True)
 with st.expander("Model Summary"):
     st.markdown(
         """
-        **Baseline**: Expanding mean of historical sales + flat future forecast.\n
-        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.\n        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
+        **Baseline**: Expanding mean of historical sales + flat future forecast.\n        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.\n        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
         """
     )
 
