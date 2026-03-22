@@ -24,10 +24,12 @@ from src.data import (
     load_sample_sales,
 )
 
+BUILD_VERSION = "2026-03-22-1705"
+
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
 st.markdown(
-    """
+    '''
     <style>
         :root {
             --primary: #1f77b4;
@@ -80,12 +82,13 @@ st.markdown(
             margin: 10px 0 6px 0;
         }
     </style>
-    """,
+    ''',
     unsafe_allow_html=True,
 )
 
 st.title("M5 Demand Forecasting MVP")
 st.caption("Portfolio demo: model selection, KPIs, and prediction overlay on sample data")
+st.caption(f"Build: {BUILD_VERSION}")
 
 use_kaggle = ensure_kaggle_dataset()
 
@@ -181,6 +184,7 @@ with st.sidebar:
     model_choice = st.selectbox("Model", ["Baseline", "LightGBM (trained)"])
     st.caption("Store/Item labels are decoded for readability; the IDs are the canonical Kaggle keys.")
     with st.expander("Kaggle Debug"):
+        st.write("App build:", BUILD_VERSION)
         st.write("KAGGLE_USERNAME set:", bool(kaggle_username))
         st.write("KAGGLE_USERNAME (masked):", _mask_secret(kaggle_username))
         st.write("KAGGLE_KEY set:", bool(kaggle_key))
