@@ -35,11 +35,11 @@ def ensure_kaggle_dataset():
     if not _kaggle_creds_available():
         KAGGLE_LAST_ERROR = "Missing KAGGLE_USERNAME or KAGGLE_KEY"
         return False
-    RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    KAGGLE_DATA_DIR.mkdir(parents=True, exist_ok=True)
     try:
         api = KaggleApi()
         api.authenticate()
-        api.dataset_download_files(KAGGLE_DATASET, path=RAW_DATA_DIR, unzip=True, quiet=True)
+        api.competition_download_files(KAGGLE_DATASET, path=KAGGLE_DATA_DIR, unzip=True, quiet=True)
     except Exception as exc:
         KAGGLE_LAST_ERROR = f"{type(exc).__name__}: {exc}"
         return False
