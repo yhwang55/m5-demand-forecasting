@@ -51,7 +51,7 @@ def _mask_secret(value: str | None) -> str:
         return "(not set)"
     if len(value) <= 4:
         return "***"
-    return f"{value[:2]}***{value[-2:]}`
+    return f"{value[:2]}***{value[-2:]}"
 
 
 def _build_lag_features(series: pd.Series) -> pd.DataFrame:
@@ -186,7 +186,8 @@ st.plotly_chart(fig, use_container_width=True)
 with st.expander("Model Summary"):
     st.markdown(
         """
-        **Baseline**: Expanding mean of historical sales + flat future forecast.\n        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.\n        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
+        **Baseline**: Expanding mean of historical sales + flat future forecast.\n
+        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.\n        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
         """
     )
 
