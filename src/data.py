@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import zipfile
 
 import pandas as pd
 from kaggle.api.kaggle_api_extended import KaggleApi
@@ -27,6 +28,12 @@ def load_sample_prices():
 def _kaggle_creds_available():
     return bool(os.getenv("KAGGLE_USERNAME")) and bool(os.getenv("KAGGLE_KEY"))
 
+def _unzip_if_needed(zip_path: Path, target_dir: Path):
+    if not zip_path.exists():
+        return
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        zip_ref.extractall(target_dir)
+
 def ensure_kaggle_dataset():
     global KAGGLE_LAST_ERROR
     KAGGLE_LAST_ERROR = None
@@ -39,7 +46,9 @@ def ensure_kaggle_dataset():
     try:
         api = KaggleApi()
         api.authenticate()
-        api.competition_download_files(KAGGLE_DATASET, path=KAGGLE_DATA_DIR, unzip=True, quiet=True)
+        api.competition_download_files(KAGGLE_DATASET, path=KAGGLE_DATA_DIR, quiet=True)
+        zip_path = KAGGLE_DATA_DIR / f"{KAGGLE_DATASET}.zip"
+        _unzip_if_needed(zip_path, KAGGLE_DATA_DIR)
     except Exception as exc:
         KAGGLE_LAST_ERROR = f"{type(exc).__name__}: {exc}"
         return False
