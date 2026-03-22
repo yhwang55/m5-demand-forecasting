@@ -221,9 +221,13 @@ if not filtered.empty:
             "prediction": forecast_values.values,
         }
     )
+
+    plot_history = filtered[["date", "sales"]].copy()
+    plot_history["prediction"] = np.nan
+
     plot_data = pd.concat(
         [
-            filtered[["date", "sales", "prediction"]],
+            plot_history,
             forecast_df,
         ],
         ignore_index=True,
