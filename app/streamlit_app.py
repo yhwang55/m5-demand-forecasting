@@ -129,7 +129,7 @@ with st.sidebar:
         st.write("KAGGLE_KEY (masked):", _mask_secret(kaggle_key))
         st.write("Kaggle dataset ready:", use_kaggle)
         st.write("Required files present:", kaggle_status["required_files_present"])
-        st.write("Last error:", kaggle_status["last_error"])
+        st.write("Last error:", kaggle_status["last_error"]) 
 
 if use_kaggle:
     filtered = load_kaggle_sales_for_item(store, item, last_n_days=730)
@@ -213,7 +213,9 @@ with st.expander("Model Summary"):
         """
     )
 
-with st.expander("Data Snapshot"):
-    st.dataframe(filtered.head(10).astype(str), use_container_width=True)
+with st.expander("Data Snapshot"): 
+    snapshot = filtered.head(10).copy()
+    snapshot = snapshot.astype(str)
+st.markdown(snapshot.to_html(index=False), unsafe_allow_html=True)
 
 st.caption("MVP: Filter + Actual vs Prediction + KPIs + Summary")
