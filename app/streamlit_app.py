@@ -294,14 +294,20 @@ fig = px.line(
     x="date",
     y="value",
     color="series",
+    line_dash="series",
     title="Actual vs Prediction",
     labels={"value": "Sales", "series": "Series"},
-    color_discrete_sequence=["#1f77b4", "#ff7f0e"],
+    color_discrete_map={"sales": "#1f77b4", "prediction": "#ff7f0e"},
+    line_dash_map={"sales": "solid", "prediction": "dash"},
 )
 fig.update_traces(
     line=dict(width=3),
-    marker=dict(size=5),
-    hovertemplate="%{x|%Y-%m-%d}<br>Sales: %{y:.2f}<extra>%{legendgroup}</extra>",
+    mode="lines+markers",
+    marker=dict(size=4),
+    hovertemplate="%{x|%Y-%m-%d}<br>%{legendgroup}: %{y:.2f}<extra></extra>",
+)
+fig.for_each_trace(
+    lambda trace: trace.update(opacity=0.85) if trace.name == "prediction" else None
 )
 fig.update_layout(
     template="plotly_white",
@@ -321,7 +327,9 @@ st.plotly_chart(fig, use_container_width=True)
 with st.expander("Model Summary"):
     st.markdown(
         """
-        **Baseline**: Expanding mean of historical sales + flat future forecast.\n        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.\n        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
+        **Baseline**: Expanding mean of historical sales + flat future forecast.
+        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.
+        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
         """
     )
 
