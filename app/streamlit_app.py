@@ -24,7 +24,7 @@ from src.data import (
     load_sample_sales,
 )
 
-BUILD_VERSION = "2026-03-22-1719"
+BUILD_VERSION = "2026-03-22-1730"
 
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
@@ -322,6 +322,8 @@ if not history_series.empty:
     )
 
 forecast_plot = forecast_series.dropna(subset=["prediction"]).copy()
+first_pred = None
+offset = None
 if last_actual_value is not None and not forecast_plot.empty:
     first_pred = float(forecast_plot["prediction"].iloc[0])
     offset = last_actual_value - first_pred
@@ -330,6 +332,24 @@ if last_actual_value is not None and not forecast_plot.empty:
         {"date": [last_actual_date], "prediction": [last_actual_value]}
     )
     forecast_plot = pd.concat([anchor_row, forecast_plot], ignore_index=True)
+
+with st.expander("Forecast Debug"):
+    st.write(
+        {
+            "history_rows": int(len(history_series)),
+            "forecast_rows": int(len(forecast_series)),
+            "forecast_plot_rows": int(len(forecast_plot)),
+            "last_actual_date": last_actual_date,
+            "last_actual_value": last_actual_value,
+            "first_pred": first_pred,
+            "offset": offset,
+        }
+    )
+    st.write("history tail", history_series.tail(3))
+    st.write("forecast head", forecast_series.head(3))
+    st.write("forecast_plot head", forecast_plot.head(3))
+    st.write("sales dtype", history_series["sales"].dtype)
+    st.write("prediction dtype", forecast_series["prediction"].dtype)
 
 if not forecast_plot.empty:
     fig.add_trace(
