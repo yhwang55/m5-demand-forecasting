@@ -109,7 +109,7 @@ def _mask_secret(value: str | None) -> str:
         return "(not set)"
     if len(value) <= 4:
         return "***"
-    return f"{value[:2]}***{value[-2:]}"
+    return f"{value[:2]}***{value[-2:] }"
 
 
 def _format_store(store_id: str) -> str:
@@ -296,8 +296,26 @@ fig = px.line(
     color="series",
     title="Actual vs Prediction",
     labels={"value": "Sales", "series": "Series"},
+    color_discrete_sequence=["#1f77b4", "#ff7f0e"],
 )
-fig.update_layout(legend_title_text="")
+fig.update_traces(
+    line=dict(width=3),
+    marker=dict(size=5),
+    hovertemplate="%{x|%Y-%m-%d}<br>Sales: %{y:.2f}<extra>%{legendgroup}</extra>",
+)
+fig.update_layout(
+    template="plotly_white",
+    hovermode="x unified",
+    legend_title_text="",
+    xaxis_title="",
+    yaxis_title="Sales",
+    margin=dict(l=10, r=10, t=40, b=10),
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+)
+fig.update_xaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)")
+fig.update_yaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)", zeroline=False)
+
 st.plotly_chart(fig, use_container_width=True)
 
 with st.expander("Model Summary"):
