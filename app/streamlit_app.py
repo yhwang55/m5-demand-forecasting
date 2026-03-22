@@ -208,7 +208,7 @@ if not filtered.empty:
         forecast_values = pd.Series([baseline_forecast] * forecast_days)
     else:
         model, features = _train_lightgbm_model(sales_series)
-        in_sample_preds = model.predict(features.drop(columns=["sales"]).astype(float))
+        in_sample_preds = model.predict(features.drop(columns=["sales"])).astype(float)
         filtered.loc[features.index, "prediction"] = in_sample_preds
         forecast_values = _forecast_lightgbm(model, sales_series, forecast_days)
 
@@ -248,9 +248,9 @@ kpi_cols = st.columns(4)
 
 kpi_cols[0].markdown(
     f"""
-    <div class="kpi-card kpi-highlight">
-        <div class="kpi-title">Price</div>
-        <div class="kpi-value">{price if price is not None else 0}</div>
+    <div class=\"kpi-card kpi-highlight\">
+        <div class=\"kpi-title\">Price</div>
+        <div class=\"kpi-value\">{price if price is not None else 0}</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -258,9 +258,9 @@ kpi_cols[0].markdown(
 
 kpi_cols[1].markdown(
     f"""
-    <div class="kpi-card kpi-accent">
-        <div class="kpi-title">Avg Sales</div>
-        <div class="kpi-value">{avg_sales:,.1f}</div>
+    <div class=\"kpi-card kpi-accent\">
+        <div class=\"kpi-title\">Avg Sales</div>
+        <div class=\"kpi-value\">{avg_sales:,.1f}</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -268,9 +268,9 @@ kpi_cols[1].markdown(
 
 kpi_cols[2].markdown(
     f"""
-    <div class="kpi-card kpi-highlight">
-        <div class="kpi-title">Latest Sales</div>
-        <div class="kpi-value">{latest_sales:,.1f}</div>
+    <div class=\"kpi-card kpi-highlight\">
+        <div class=\"kpi-title\">Latest Sales</div>
+        <div class=\"kpi-value\">{latest_sales:,.1f}</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -278,9 +278,9 @@ kpi_cols[2].markdown(
 
 kpi_cols[3].markdown(
     f"""
-    <div class="kpi-card kpi-success">
-        <div class="kpi-title">Prediction MAE</div>
-        <div class="kpi-value">{mae:,.2f}</div>
+    <div class=\"kpi-card kpi-success\">
+        <div class=\"kpi-title\">Prediction MAE</div>
+        <div class=\"kpi-value\">{mae:,.2f}</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -293,6 +293,8 @@ plot_df = plot_data.melt(
     var_name="series",
     value_name="value",
 )
+plot_df["series"] = plot_df["series"].astype(str).str.strip()
+
 fig = px.line(
     plot_df,
     x="date",
@@ -300,6 +302,7 @@ fig = px.line(
     color="series",
     title="Actual vs Prediction",
     labels={"value": "Sales", "series": "Series"},
+    category_orders={"series": ["sales", "prediction"]},
     color_discrete_map={"sales": "#1f77b4", "prediction": "#ff7f0e"},
 )
 fig.update_traces(
