@@ -24,7 +24,7 @@ from src.data import (
     load_sample_sales,
 )
 
-BUILD_VERSION = "2026-03-22-1705"
+BUILD_VERSION = "2026-03-22-1719"
 
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
@@ -293,14 +293,17 @@ kpi_cols[3].markdown(
 
 st.markdown("### Sales Forecast View")
 
-history_series = plot_data.dropna(subset=["sales"])
-forecast_series = plot_data.dropna(subset=["prediction"])    
+history_series = plot_data.dropna(subset=["sales"]).copy()
+forecast_series = plot_data.dropna(subset=["prediction"]).copy()
+
+history_series["sales"] = pd.to_numeric(history_series["sales"], errors="coerce")
+forecast_series["prediction"] = pd.to_numeric(forecast_series["prediction"], errors="coerce")
 
 last_actual_date = None
 last_actual_value = None
 if not history_series.empty:
     last_actual_date = history_series["date"].iloc[-1]
-    last_actual_value = history_series["sales"].iloc[-1]
+    last_actual_value = float(history_series["sales"].iloc[-1])
 
 if history_series.empty:
     st.warning("No non-null sales values to plot for the selected store/item.")
@@ -318,7 +321,7 @@ if not history_series.empty:
         )
     )
 
-forecast_plot = forecast_series.copy()
+forecast_plot = forecast_series.dropna(subset=["prediction"]).copy()
 if last_actual_value is not None and not forecast_plot.empty:
     first_pred = float(forecast_plot["prediction"].iloc[0])
     offset = last_actual_value - first_pred
