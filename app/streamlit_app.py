@@ -208,7 +208,7 @@ if not filtered.empty:
         forecast_values = pd.Series([baseline_forecast] * forecast_days)
     else:
         model, features = _train_lightgbm_model(sales_series)
-        in_sample_preds = model.predict(features.drop(columns=["sales"])).astype(float)
+        in_sample_preds = model.predict(features.drop(columns=["sales"]).astype(float))
         filtered.loc[features.index, "prediction"] = in_sample_preds
         forecast_values = _forecast_lightgbm(model, sales_series, forecast_days)
 
@@ -223,6 +223,7 @@ if not filtered.empty:
     )
 
     plot_history = filtered[["date", "sales"]].copy()
+    plot_history["sales"] = plot_history["sales"].astype(float)
     plot_history["prediction"] = np.nan
 
     plot_data = pd.concat(
@@ -299,7 +300,7 @@ fig = px.line(
     color="series",
     title="Actual vs Prediction",
     labels={"value": "Sales", "series": "Series"},
-    color_discrete_sequence=["#1f77b4", "#ff7f0e"],
+    color_discrete_map={"sales": "#1f77b4", "prediction": "#ff7f0e"},
 )
 fig.update_traces(
     line=dict(width=3),
