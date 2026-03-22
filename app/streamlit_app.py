@@ -290,7 +290,7 @@ kpi_cols[3].markdown(
 st.markdown("### Sales Forecast View")
 
 history_series = plot_data.dropna(subset=["sales"])
-forecast_series = plot_data.dropna(subset=["prediction"])
+forecast_series = plot_data.dropna(subset=["prediction"])    
 
 last_actual_date = None
 last_actual_value = None
@@ -314,12 +314,15 @@ if not history_series.empty:
         )
     )
 
-forecast_plot = forecast_series
-if last_actual_date is not None and not forecast_series.empty:
+forecast_plot = forecast_series.copy()
+if last_actual_value is not None and not forecast_plot.empty:
+    first_pred = float(forecast_plot["prediction"].iloc[0])
+    offset = last_actual_value - first_pred
+    forecast_plot["prediction"] = forecast_plot["prediction"] + offset
     anchor_row = pd.DataFrame(
         {"date": [last_actual_date], "prediction": [last_actual_value]}
     )
-    forecast_plot = pd.concat([anchor_row, forecast_series], ignore_index=True)
+    forecast_plot = pd.concat([anchor_row, forecast_plot], ignore_index=True)
 
 if not forecast_plot.empty:
     fig.add_trace(
