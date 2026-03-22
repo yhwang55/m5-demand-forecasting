@@ -112,3 +112,40 @@ def load_m5_sales(path=None):
     if path:
         return pd.read_csv(path)
     return pd.read_csv(KAGGLE_DATA_DIR / "sales_train_validation.csv")
+
+def load_kaggle_store_item_index():
+    sales = pd.read_csv(
+        KAGGLE_DATA_DIR / "sales_train_validation.csv",
+        usecols=["store_id", "item_id"],
+    )
+    store_ids = sorted(sales["store_id"].unique())
+    item_ids = sorted(sales["item_id"].unique())
+    return store_ids, item_ids
+
+def load_kaggle_sales_for_item(store_id: str, item_id: str, last_n_days=365):
+    columns = pd.read_csv(
+        KAGGLE_DATA_DIR / "sales_train_validation.csv",
+        nrows=0,
+    ).columns
+    d_cols = [col for col in columns if col.startswith("d_")]
+    if last_n_days and last_n_days < len(d_cols):
+        d_cols = d_cols[-last_n_days:]
+    usecols = ["store_id", "item_id"] + d_cols
+
+    sales = pd.read_csv(
+        KAGGLE_DATA_DIR / "sales_train_validation.csv",
+        usecols=usecols,
+    )
+    filtered = sales[(sales["store_id"] == store_id) & (sales["item_id"] == item_id)]
+    if filtered.empty:
+        return pd.DataFrame(columns=["store_id", "item_id", "date", "sales"])
+
+    melted = filtered[["store_id", "item_id"] + d_cols].melt(
+        id_vars=["store_id", "item_id"],
+        var_name="d",
+        value_name="sales",
+    )
+    calendar = pd.read_csv(KAGGLE_DATA_DIR / "calendar.csv", usecols=["d", "date"])
+    merged = melted.merge(calendar, on="d", how="left")
+    merged["date"] = pd.to_datetime(merged["date"])
+    return merged[["store_id", "item_id", "date", "sales"]]
