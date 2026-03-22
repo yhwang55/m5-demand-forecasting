@@ -209,7 +209,7 @@ if not filtered.empty:
         forecast_values = pd.Series([baseline_forecast] * forecast_days)
     else:
         model, features = _train_lightgbm_model(sales_series)
-        in_sample_preds = model.predict(features.drop(columns=["sales"])).astype(float)
+        in_sample_preds = model.predict(features.drop(columns=["sales"])) .astype(float)
         filtered.loc[features.index, "prediction"] = in_sample_preds
         forecast_values = _forecast_lightgbm(model, sales_series, forecast_days)
 
@@ -223,7 +223,7 @@ if not filtered.empty:
         }
     )
 
-    plot_history = filtered[["date", "sales"]].copy()
+    plot_history = filtered[["date", "sales" ]].copy()
     plot_history["sales"] = plot_history["sales"].astype(float)
     plot_history["prediction"] = np.nan
 
@@ -289,5 +289,65 @@ kpi_cols[3].markdown(
 
 st.markdown("### Sales Forecast View")
 
-history_series = plot_data.dropna(subset=["sales"])
-forecast_series = plot_data.dropna(subset=["prediction"])\n\nif history_series.empty:\n    st.warning("No non-null sales values to plot for the selected store/item.")\n\nfig = go.Figure()\nif not history_series.empty:\n    fig.add_trace(\n        go.Scatter(\n            x=history_series["date"],\n            y=history_series["sales"],\n            mode="lines+markers",\n            name="sales",\n            line=dict(color="#1f77b4", width=3),\n            marker=dict(size=5),\n        )\n    )\n\nif not forecast_series.empty:\n    fig.add_trace(\n        go.Scatter(\n            x=forecast_series["date"],\n            y=forecast_series["prediction"],\n            mode="lines+markers",\n            name="prediction",\n            line=dict(color="#ff7f0e", width=3),\n            marker=dict(size=5),\n        )\n    )\n\nfig.update_layout(\n    title="Actual vs Prediction",\n    template="plotly_white",\n    hovermode="x unified",\n    legend_title_text="",\n    xaxis_title="",\n    yaxis_title="Sales",\n    margin=dict(l=10, r=10, t=40, b=10),\n    plot_bgcolor="rgba(0,0,0,0)",\n    paper_bgcolor="rgba(0,0,0,0)",\n)\nfig.update_xaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)")\nfig.update_yaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)", zeroline=False)\n\nst.plotly_chart(fig, use_container_width=True)\n\nwith st.expander("Model Summary"):\n    st.markdown(\n        """\n        **Baseline**: Expanding mean of historical sales + flat future forecast.\n        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.\n        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*\n        """\n    )\n\nwith st.expander("Data Snapshot"):\n    snapshot = filtered.head(10).copy()\n    snapshot = snapshot.astype(str)\n    st.markdown(snapshot.to_html(index=False), unsafe_allow_html=True)\n\nst.caption("MVP: Filter + Actual vs Prediction + KPIs + Summary")\n
+history_series = plot_data.dropna(subset=["sales"]) 
+forecast_series = plot_data.dropna(subset=["prediction"]) 
+
+if history_series.empty:
+    st.warning("No non-null sales values to plot for the selected store/item.")
+
+fig = go.Figure()
+if not history_series.empty:
+    fig.add_trace(
+        go.Scatter(
+            x=history_series["date"],
+            y=history_series["sales"],
+            mode="lines+markers",
+            name="sales",
+            line=dict(color="#1f77b4", width=3),
+            marker=dict(size=5),
+        )
+    )
+
+if not forecast_series.empty:
+    fig.add_trace(
+        go.Scatter(
+            x=forecast_series["date"],
+            y=forecast_series["prediction"],
+            mode="lines+markers",
+            name="prediction",
+            line=dict(color="#ff7f0e", width=3),
+            marker=dict(size=5),
+        )
+    )
+
+fig.update_layout(
+    title="Actual vs Prediction",
+    template="plotly_white",
+    hovermode="x unified",
+    legend_title_text="",
+    xaxis_title="",
+    yaxis_title="Sales",
+    margin=dict(l=10, r=10, t=40, b=10),
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+)
+fig.update_xaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)")
+fig.update_yaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)", zeroline=False)
+
+st.plotly_chart(fig, use_container_width=True)
+
+with st.expander("Model Summary"):
+    st.markdown(
+        """
+        **Baseline**: Expanding mean of historical sales + flat future forecast.
+        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.
+        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
+        """
+    )
+
+with st.expander("Data Snapshot"):
+    snapshot = filtered.head(10).copy()
+    snapshot = snapshot.astype(str)
+    st.markdown(snapshot.to_html(index=False), unsafe_allow_html=True)
+
+st.caption("MVP: Filter + Actual vs Prediction + KPIs + Summary")
