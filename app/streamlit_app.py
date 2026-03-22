@@ -186,7 +186,7 @@ with st.sidebar:
         st.write("KAGGLE_KEY (masked):", _mask_secret(kaggle_key))
         st.write("Kaggle dataset ready:", use_kaggle)
         st.write("Required files present:", kaggle_status["required_files_present"])
-        st.write("Last error:", kaggle_status["last_error"])
+        st.write("Last error:", kaggle_status["last_error"])  
 
 if use_kaggle:
     filtered = load_kaggle_sales_for_item(store, item, last_n_days=730)
@@ -208,7 +208,7 @@ if not filtered.empty:
         forecast_values = pd.Series([baseline_forecast] * forecast_days)
     else:
         model, features = _train_lightgbm_model(sales_series)
-        in_sample_preds = model.predict(features.drop(columns=["sales"]))
+        in_sample_preds = model.predict(features.drop(columns=["sales"])).astype(float)
         filtered.loc[features.index, "prediction"] = in_sample_preds
         forecast_values = _forecast_lightgbm(model, sales_series, forecast_days)
 
@@ -320,7 +320,9 @@ st.plotly_chart(fig, use_container_width=True)
 with st.expander("Model Summary"):
     st.markdown(
         """
-        **Baseline**: Expanding mean of historical sales + flat future forecast.\n        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.\n        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
+        **Baseline**: Expanding mean of historical sales + flat future forecast.
+        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.
+        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
         """
     )
 
