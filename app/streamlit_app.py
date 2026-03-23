@@ -24,7 +24,7 @@ from src.data import (
     load_sample_sales,
 )
 
-BUILD_VERSION = "2026-03-23-2110"
+BUILD_VERSION = "2026-03-23-2135"
 
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
@@ -191,7 +191,7 @@ with st.sidebar:
         st.write("KAGGLE_KEY (masked):", _mask_secret(kaggle_key))
         st.write("Kaggle dataset ready:", use_kaggle)
         st.write("Required files present:", kaggle_status["required_files_present"])
-        st.write("Last error:", kaggle_status["last_error"]) 
+        st.write("Last error:", kaggle_status["last_error"])
 
 if use_kaggle:
     filtered = load_kaggle_sales_for_item(store, item, last_n_days=730)
@@ -239,7 +239,7 @@ if not filtered.empty:
         ignore_index=True,
     )
 else:
-    plot_data = filtered[["date", "sales", "prediction"]]
+    plot_data = filtered[["date", "sales"]]
 
 avg_sales = float(filtered["sales"].mean()) if not filtered.empty else 0.0
 latest_sales = float(filtered["sales"].iloc[-1]) if not filtered.empty else 0.0
@@ -293,7 +293,9 @@ kpi_cols[3].markdown(
 
 st.markdown("### Sales Forecast View")
 
-history_series = plot_data.dropna(subset=["sales"]).copy()
+history_series = filtered[["date", "sales"]].copy()
+history_series["sales"] = pd.to_numeric(history_series["sales"], errors="coerce")
+history_series = history_series.dropna(subset=["sales"]) 
 
 if history_series.empty:
     st.warning("No non-null sales values to plot for the selected store/item.")
@@ -306,7 +308,7 @@ if not history_series.empty:
             y=history_series["sales"],
             mode="markers",
             name="sales",
-            marker=dict(size=6, color="#1f77b4"),
+            marker=dict(size=6, color=" #1f77b4"),
         )
     )
     avg_line_value = float(history_series["sales"].mean())
@@ -321,7 +323,7 @@ if not history_series.empty:
     )
 
 fig.update_layout(
-    title="Actual vs Prediction",
+    title="Actual vs Average",
     template="plotly_white",
     hovermode="x unified",
     legend_title_text="",
