@@ -24,7 +24,7 @@ from src.data import (
     load_sample_sales,
 )
 
-BUILD_VERSION = "2026-03-23-2035"
+BUILD_VERSION = "2026-03-23-2100"
 
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
@@ -294,26 +294,6 @@ kpi_cols[3].markdown(
 st.markdown("### Sales Forecast View")
 
 history_series = plot_data.dropna(subset=["sales"]).copy()
-forecast_series = plot_data.dropna(subset=["prediction"]).copy()
-
-history_series["sales"] = pd.to_numeric(history_series["sales"], errors="coerce")
-forecast_series["prediction"] = pd.to_numeric(forecast_series["prediction"], errors="coerce")
-
-last_actual_date = None
-last_actual_value = None
-if not history_series.empty:
-    last_actual_date = history_series["date"].iloc[-1]
-    last_actual_value = float(history_series["sales"].iloc[-1])
-
-nonzero_history = history_series.loc[history_series["sales"].notna() & (history_series["sales"] > 0)]
-anchor_date = last_actual_date
-anchor_value = last_actual_value
-if anchor_value is None and not nonzero_history.empty:
-    anchor_value = float(nonzero_history["sales"].iloc[-1])
-    anchor_date = nonzero_history["date"].iloc[-1]
-if anchor_value == 0 and not nonzero_history.empty:
-    anchor_value = float(nonzero_history["sales"].iloc[-1])
-    anchor_date = nonzero_history["date"].iloc[-1]
 
 if history_series.empty:
     st.warning("No non-null sales values to plot for the selected store/item.")
@@ -327,28 +307,6 @@ if not history_series.empty:
             mode="lines+markers",
             name="sales",
             line=dict(color="#1f77b4", width=3),
-            marker=dict(size=5),
-        )
-    )
-
-forecast_plot = forecast_series.dropna(subset=["prediction"]).copy()
-if anchor_value is not None and not forecast_plot.empty:
-    first_pred = float(forecast_plot["prediction"].iloc[0])
-    offset = anchor_value - first_pred
-    forecast_plot["prediction"] = forecast_plot["prediction"] + offset
-    anchor_row = pd.DataFrame(
-        {"date": [anchor_date], "prediction": [anchor_value]}
-    )
-    forecast_plot = pd.concat([anchor_row, forecast_plot], ignore_index=True)
-
-if not forecast_plot.empty:
-    fig.add_trace(
-        go.Scatter(
-            x=forecast_plot["date"],
-            y=forecast_plot["prediction"],
-            mode="lines+markers",
-            name="prediction",
-            line=dict(color="#ff7f0e", width=3),
             marker=dict(size=5),
         )
     )
