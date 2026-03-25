@@ -1,7 +1,7 @@
 # M5 Demand Forecasting
 
-M5 Forecasting (Walmart 5년치 일별 판매) 데이터 기반 수요예측 프로젝트 스켈레톤입니다.  
-Baseline + LightGBM + Prophet 모델을 포함하며, 노트북 단계별 구성과 성능 비교, 가격 탄력성 분석, Streamlit 대시보드 MVP를 제공합니다.
+M5 Forecasting (Walmart 5년치 일별 판매) 데이터를 활용한 수요예측 프로젝트입니다.  
+Baseline → LightGBM → Prophet 모델로 확장하며, 노트북 기반 EDA/모델 비교, 가격 탄력성 분석, Streamlit 대시보드 MVP까지 포함합니다.
 
 ## Live Demo (Streamlit Cloud)
 [![Launch App](https://img.shields.io/badge/Streamlit-Launch%20App-brightgreen)](https://m5-demand-forecasting-project.streamlit.app/)
@@ -15,15 +15,30 @@ streamlit run app/streamlit_app.py
 
 > 위 Quickstart는 이미 포함된 **합성 샘플 CSV**로 즉시 실행됩니다.
 
-## Streamlit Cloud 배포 방법
-1. Streamlit Cloud에 로그인
-2. "New app" 클릭 → GitHub repo 연결
-3. Repo: `yhwang55/m5-demand-forecasting`
-4. Branch: `main`
-5. Main file path: `app/streamlit_app.py`
-6. Deploy 클릭 → 생성된 URL을 위 **Launch App** 버튼 링크로 교체
+## Project Structure
+**Data Inspection & Preprocessing**
+- `scripts/generate_sample_data.py`: 샘플 데이터 생성 및 검증
+- `src/data.py`: 데이터 로드/캐싱/유틸리티
+- `src/features.py`: 라그/롤링 기반 피처 생성
 
-## 프로젝트 구조
+**Model Training Phases**
+- `scripts/train_baseline.py`: 최근값 기반 Baseline
+- `scripts/train_lightgbm.py`: LightGBM 회귀 모델
+- `scripts/train_prophet.py`: Prophet 시계열 모델
+- `scripts/evaluate_models.py`: 모델 성능 비교 리포트
+
+## Usage
+**Pre-requisites**: Python, pandas, numpy, scikit-learn, lightgbm, prophet, plotly, streamlit 설치 필요
+
+**Data**: Kaggle M5 Forecasting 데이터셋 사용 (샘플은 자동 생성 가능)
+
+**Execution**: 데이터 생성 → Baseline 학습 → 고급 모델 학습 → 평가 순서로 실행
+
+## Outputs
+각 학습 스크립트는 모델 결과/평가 리포트를 `outputs/` 폴더에 저장합니다.  
+추가로 노트북에서 비교 차트 및 가격 탄력성 분석 결과를 시각화합니다.
+
+## 프로젝트 구조 (전체)
 ```
 M5 Demand Forecasting/
 ├─ README.md
@@ -65,13 +80,6 @@ M5 Demand Forecasting/
 └─ .gitignore
 ```
 
-## 빠른 시작
-```bash
-pip install -r requirements.txt
-python scripts/generate_sample_data.py
-python scripts/train_baseline.py
-```
-
 ## 노트북 흐름
 1. **00_data_overview**: 데이터 구조 및 EDA
 2. **01_baseline_model**: Baseline 모델
@@ -81,22 +89,8 @@ python scripts/train_baseline.py
 6. **05_price_elasticity**: 가격 탄력성 분석
 7. **06_dashboard_preview**: Streamlit 대시보드 미리보기
 
-## 데이터
-- Kaggle M5 Forecasting 데이터셋 사용
-- 샘플 데이터는 `scripts/generate_sample_data.py`로 생성 (3 stores, 200 items)
-
-## 모델
-- Baseline (최근값 기준)
-- LightGBM
-- Prophet
-
 ## 평가 지표
 - RMSE / MAE / MAPE
-
-## Streamlit 대시보드
-```bash
-streamlit run app/streamlit_app.py
-```
 
 ---
 
