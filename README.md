@@ -3,6 +3,9 @@
 M5 Forecasting (Walmart 5년치 일별 판매) 데이터를 활용한 수요예측 프로젝트입니다.  
 Baseline → LightGBM → Prophet 모델로 확장하며, 노트북 기반 EDA/모델 비교, 가격 탄력성 분석, Streamlit 대시보드 MVP까지 포함합니다.
 
+## Project Report (PDF)
+[![Project Report](https://img.shields.io/badge/Report-PDF-blue)](M5_Forecasting_Report_.pdf)
+
 ## Live Demo (Streamlit Cloud)
 [![Launch App](https://img.shields.io/badge/Streamlit-Launch%20App-brightgreen)](https://m5-demand-forecasting-project.streamlit.app/)
 
