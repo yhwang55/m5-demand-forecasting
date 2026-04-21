@@ -26,6 +26,54 @@ from src.data import (
 
 BUILD_VERSION = "2026-03-23-2145"
 
+# ── Category/Dept display helpers ──────────────────────────────────────────────
+CATEGORY_LABELS = {
+    "FOODS":     "🍎 Foods",
+    "HOBBIES":   "🎮 Hobbies",
+    "HOUSEHOLD": "🏠 Household",
+}
+
+DEPT_DESC = {
+    "FOODS_1":     "Produce & Deli",
+    "FOODS_2":     "Dry Goods",
+    "FOODS_3":     "Beverages & Snacks",
+    "HOBBIES_1":   "Toys & Games",
+    "HOBBIES_2":   "Crafts & Outdoors",
+    "HOUSEHOLD_1": "Cleaning & Paper",
+    "HOUSEHOLD_2": "Kitchen & Home",
+}
+
+STATE_LABELS = {
+    "CA": "California",
+    "TX": "Texas",
+    "WI": "Wisconsin",
+}
+
+def _parse_store_id(store_id: str) -> dict:
+    """Split CA_1 → {state, store_num}"""
+    parts = store_id.split("_")
+    if len(parts) == 2:
+        return dict(state=parts[0], store_num=parts[1])
+    return dict(state=store_id, store_num="?")
+
+
+def _parse_item_id(item_id: str) -> dict:
+    """Split FOODS_1_001 → {category, dept_key, dept_num, item_num}"""
+    parts = item_id.split("_")
+    if len(parts) >= 3:
+        category  = parts[0]
+        dept_num  = parts[1]
+        item_num  = "_".join(parts[2:])
+        dept_key  = f"{category}_{dept_num}"
+        return dict(
+            category=category,
+            dept_num=dept_num,
+            dept_key=dept_key,
+            item_num=item_num,
+        )
+    return dict(category=item_id, dept_num="?", dept_key=item_id, item_num="?")
+
+
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
 st.markdown(
@@ -81,6 +129,51 @@ st.markdown(
             color: #0f172a;
             margin: 10px 0 6px 0;
         }
+        /* Item info card */
+        .item-info-card {
+            background: linear-gradient(135deg, #f0f7ff 0%, #fafafa 100%);
+            border: 1px solid rgba(31, 119, 180, 0.2);
+            border-radius: 12px;
+            padding: 14px 20px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            flex-wrap: wrap;
+        }
+        .item-info-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: white;
+            border: 1px solid #dbeafe;
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #1e40af;
+        }
+        .item-info-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .item-info-value {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .item-info-section {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .item-info-divider {
+            color: #cbd5e1;
+            font-size: 1.2rem;
+        }
     </style>
     ''',
     unsafe_allow_html=True,
@@ -122,20 +215,8 @@ def _format_store(store_id: str) -> str:
     parts = store_id.split("_")
     if len(parts) == 2:
         state, store_num = parts
-        return f"{store_id} (State {state}, Store {store_num})"
+        return f"{store_id}  (State: {state} · Store #{store_num})"
     return store_id
-
-
-def _format_item(item_id: str) -> str:
-    if not item_id:
-        return "(unknown item)"
-    parts = item_id.split("_")
-    if len(parts) >= 3:
-        category = parts[0]
-        dept = parts[1]
-        item_num = "_".join(parts[2:])
-        return f"{item_id} (Category {category}, Dept {dept}, Item {item_num})"
-    return item_id
 
 
 def _build_lag_features(series: pd.Series) -> pd.DataFrame:
@@ -176,13 +257,89 @@ def _forecast_lightgbm(model: LGBMRegressor, history: pd.Series, horizon: int) -
         values.append(next_pred)
     return pd.Series(preds)
 
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filters")
-    store = st.selectbox("Store", store_ids, format_func=_format_store)
-    item = st.selectbox("Item", item_ids, format_func=_format_item)
+
+    # ── Hierarchical Store selector ─────────────────────────────────────────
+    st.markdown("**Store**")
+
+    all_store_parsed = [_parse_store_id(s) for s in store_ids]
+
+    # Step 1 — State
+    states = sorted({p["state"] for p in all_store_parsed})
+    sel_state = st.selectbox(
+        "① State",
+        states,
+        format_func=lambda s: f"{s}  —  {STATE_LABELS.get(s, s)}",
+    )
+
+    # Step 2 — Store number (filtered by state)
+    stores_in_state = sorted([
+        s for s, p in zip(store_ids, all_store_parsed)
+        if p["state"] == sel_state
+    ])
+    sel_store = st.selectbox(
+        "② Store",
+        stores_in_state,
+        format_func=lambda s: f"Store #{_parse_store_id(s)['store_num']}  ({s})",
+    )
+    store = sel_store
+
+    st.divider()
+
+    # ── Hierarchical Item selector ──────────────────────────────────────────
+    st.markdown("**Item**")
+    st.caption("Item IDs follow the format `CATEGORY_DEPT_NUMBER` in the M5 dataset.")
+
+    # Step 1 — Category
+    all_parsed   = [_parse_item_id(i) for i in item_ids]
+    categories   = sorted({p["category"] for p in all_parsed})
+    cat_labels   = {c: CATEGORY_LABELS.get(c, c) for c in categories}
+    sel_category = st.selectbox(
+        "① Category",
+        categories,
+        format_func=lambda c: cat_labels[c],
+    )
+
+    # Step 2 — Department (filtered by category)
+    dept_keys_in_cat = sorted({
+        p["dept_key"] for p in all_parsed if p["category"] == sel_category
+    })
+    def _fmt_dept(dk):
+        num  = dk.split("_")[1] if "_" in dk else dk
+        desc = DEPT_DESC.get(dk, "")
+        return f"Dept {num}  —  {desc}" if desc else f"Dept {num}"
+
+    sel_dept = st.selectbox(
+        "② Department",
+        dept_keys_in_cat,
+        format_func=_fmt_dept,
+    )
+
+    # Step 3 — Item number (filtered by dept)
+    items_in_dept = sorted([
+        i for i, p in zip(item_ids, all_parsed)
+        if p["dept_key"] == sel_dept
+    ])
+    def _fmt_item_num(i):
+        p = _parse_item_id(i)
+        return f"Item #{p['item_num']}"
+
+    sel_item_id = st.selectbox(
+        "③ Item Number",
+        items_in_dept,
+        format_func=_fmt_item_num,
+    )
+
+    # Use the resolved item_id from here on
+    item = sel_item_id
+
+    st.divider()
     forecast_days = st.slider("Forecast horizon (days)", min_value=7, max_value=90, value=28)
-    model_choice = st.selectbox("Model", ["Baseline", "LightGBM (trained)"])
-    st.caption("Store/Item labels are decoded for readability; the IDs are the canonical Kaggle keys.")
+    model_choice  = st.selectbox("Model", ["Baseline", "LightGBM (trained)"])
+
     with st.expander("Kaggle Debug"):
         st.write("App build:", BUILD_VERSION)
         st.write("KAGGLE_USERNAME set:", bool(kaggle_username))
@@ -191,16 +348,58 @@ with st.sidebar:
         st.write("KAGGLE_KEY (masked):", _mask_secret(kaggle_key))
         st.write("Kaggle dataset ready:", use_kaggle)
         st.write("Required files present:", kaggle_status["required_files_present"])
-        st.write("Last error:", kaggle_status["last_error"])  
+        st.write("Last error:", kaggle_status["last_error"])
 
+
+# ── Selected item info card ────────────────────────────────────────────────────
+parsed     = _parse_item_id(item)
+cat_label  = CATEGORY_LABELS.get(parsed["category"], parsed["category"])
+dept_label = _fmt_dept(parsed["dept_key"])
+
+store_parsed = _parse_store_id(store)
+state_label  = STATE_LABELS.get(store_parsed["state"], store_parsed["state"])
+
+st.markdown(
+    f"""
+    <div class="item-info-card">
+        <div class="item-info-section">
+            <span class="item-info-label">Store</span>
+            <span class="item-info-value">{store}</span>
+        </div>
+        <div class="item-info-badge">📍 {store_parsed["state"]}  —  {state_label}</div>
+        <div class="item-info-section">
+            <span class="item-info-label">Store Number</span>
+            <span class="item-info-value">#{store_parsed["store_num"]}</span>
+        </div>
+        <span class="item-info-divider">|</span>
+        <div class="item-info-section">
+            <span class="item-info-label">Item</span>
+            <span class="item-info-value">{item}</span>
+        </div>
+        <div class="item-info-badge">{cat_label}</div>
+        <div class="item-info-section">
+            <span class="item-info-label">Department</span>
+            <span class="item-info-value">{dept_label}</span>
+        </div>
+        <div class="item-info-section">
+            <span class="item-info-label">Item Number</span>
+            <span class="item-info-value">#{parsed["item_num"]}</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ── Data loading ───────────────────────────────────────────────────────────────
 if use_kaggle:
     filtered = load_kaggle_sales_for_item(store, item, last_n_days=730)
 else:
     filtered = sales[(sales["store_id"] == store) & (sales["item_id"] == item)].copy()
 
-filtered = filtered.sort_values("date")
-price_row = prices[(prices["store_id"] == store) & (prices["item_id"] == item)]
-price = price_row["price"].iloc[0] if not price_row.empty else None
+filtered   = filtered.sort_values("date")
+price_row  = prices[(prices["store_id"] == store) & (prices["item_id"] == item)]
+price      = price_row["price"].iloc[0] if not price_row.empty else None
 
 filtered["prediction"] = np.nan
 
@@ -217,31 +416,25 @@ if not filtered.empty:
         filtered.loc[features.index, "prediction"] = in_sample_preds
         forecast_values = _forecast_lightgbm(model, sales_series, forecast_days)
 
-    last_date = pd.to_datetime(filtered["date"].iloc[-1])
+    last_date    = pd.to_datetime(filtered["date"].iloc[-1])
     future_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=forecast_days, freq="D")
-    forecast_df = pd.DataFrame(
+    forecast_df  = pd.DataFrame(
         {
-            "date": future_dates,
-            "sales": np.nan,
+            "date":       future_dates,
+            "sales":      np.nan,
             "prediction": forecast_values.values,
         }
     )
 
-    plot_history = filtered[["date", "sales"]].copy()
-    plot_history["sales"] = plot_history["sales"].astype(float)
-    plot_history["prediction"] = np.nan
+    plot_history              = filtered[["date", "sales"]].copy()
+    plot_history["sales"]     = plot_history["sales"].astype(float)
+    plot_history["prediction"]= np.nan
 
-    plot_data = pd.concat(
-        [
-            plot_history,
-            forecast_df,
-        ],
-        ignore_index=True,
-    )
+    plot_data = pd.concat([plot_history, forecast_df], ignore_index=True)
 else:
     plot_data = filtered[["date", "sales"]]
 
-avg_sales = float(filtered["sales"].mean()) if not filtered.empty else 0.0
+avg_sales    = float(filtered["sales"].mean()) if not filtered.empty else 0.0
 latest_sales = float(filtered["sales"].iloc[-1]) if not filtered.empty else 0.0
 mae = (
     float((filtered["sales"] - filtered["prediction"]).abs().mean())
@@ -249,6 +442,7 @@ mae = (
     else 0.0
 )
 
+# ── KPI cards ─────────────────────────────────────────────────────────────────
 kpi_cols = st.columns(4)
 
 kpi_cols[0].markdown(
@@ -260,7 +454,6 @@ kpi_cols[0].markdown(
     """,
     unsafe_allow_html=True,
 )
-
 kpi_cols[1].markdown(
     f"""
     <div class="kpi-card kpi-accent">
@@ -270,7 +463,6 @@ kpi_cols[1].markdown(
     """,
     unsafe_allow_html=True,
 )
-
 kpi_cols[2].markdown(
     f"""
     <div class="kpi-card kpi-highlight">
@@ -280,7 +472,6 @@ kpi_cols[2].markdown(
     """,
     unsafe_allow_html=True,
 )
-
 kpi_cols[3].markdown(
     f"""
     <div class="kpi-card kpi-success">
@@ -291,11 +482,12 @@ kpi_cols[3].markdown(
     unsafe_allow_html=True,
 )
 
+# ── Chart ──────────────────────────────────────────────────────────────────────
 st.markdown("### Sales Forecast View")
 
-history_series = filtered[["date", "sales"]].copy()
-history_series["sales"] = pd.to_numeric(history_series["sales"], errors="coerce")
-history_series = history_series.dropna(subset=["sales"])
+history_series         = filtered[["date", "sales"]].copy()
+history_series["sales"]= pd.to_numeric(history_series["sales"], errors="coerce")
+history_series         = history_series.dropna(subset=["sales"])
 
 if history_series.empty:
     st.warning("No non-null sales values to plot for the selected store/item.")
@@ -328,6 +520,7 @@ fig.update_yaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)", zeroline=Fal
 
 st.plotly_chart(fig, use_container_width=True)
 
+# ── Expanders ─────────────────────────────────────────────────────────────────
 with st.expander("Model Summary"):
     st.markdown(
         """
