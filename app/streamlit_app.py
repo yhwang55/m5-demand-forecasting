@@ -146,9 +146,11 @@ with st.sidebar:
         format_func=lambda s: f"{s}  —  {STATE_LABELS.get(s, s)}"
     )
     stores_in_state = sorted([s for s, p in store_parsed_map.items() if p["state"] == sel_state])
+    if not stores_in_state:
+        stores_in_state = sorted(store_parsed_map.keys())
     store = st.selectbox(
         "② Store", stores_in_state,
-        format_func=lambda s: f"Store #{store_parsed_map[s]['store_num']}  ({s})"
+        format_func=lambda s: f"Store #{store_parsed_map.get(s, {}).get('store_num', '?')}  ({s})"
     )
 
     st.divider()
@@ -162,8 +164,12 @@ with st.sidebar:
         format_func=lambda c: CATEGORY_LABELS.get(c, c)
     )
     depts_in_cat = sorted({v["dept_key"] for v in item_parsed_map.values() if v["category"] == sel_category})
+    if not depts_in_cat:
+        depts_in_cat = sorted({v["dept_key"] for v in item_parsed_map.values()})
     sel_dept = st.selectbox("② Department", depts_in_cat, format_func=_fmt_dept)
     items_in_dept = sorted([i for i, p in item_parsed_map.items() if p["dept_key"] == sel_dept])
+    if not items_in_dept:
+        items_in_dept = sorted(item_parsed_map.keys())
     item = st.selectbox("③ Item Number", items_in_dept, format_func=_fmt_item_num)
 
     st.divider()
