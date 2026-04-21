@@ -258,6 +258,17 @@ def _forecast_lightgbm(model: LGBMRegressor, history: pd.Series, horizon: int) -
     return pd.Series(preds)
 
 
+def _fmt_dept(dk: str) -> str:
+    num  = dk.split("_")[1] if "_" in dk else dk
+    desc = DEPT_DESC.get(dk, "")
+    return f"Dept {num}  —  {desc}" if desc else f"Dept {num}"
+
+
+def _fmt_item_num(i: str) -> str:
+    p = _parse_item_id(i)
+    return f"Item #{p['item_num']}"
+
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filters")
@@ -307,11 +318,6 @@ with st.sidebar:
     dept_keys_in_cat = sorted({
         p["dept_key"] for p in all_parsed if p["category"] == sel_category
     })
-    def _fmt_dept(dk):
-        num  = dk.split("_")[1] if "_" in dk else dk
-        desc = DEPT_DESC.get(dk, "")
-        return f"Dept {num}  —  {desc}" if desc else f"Dept {num}"
-
     sel_dept = st.selectbox(
         "② Department",
         dept_keys_in_cat,
@@ -323,9 +329,6 @@ with st.sidebar:
         i for i, p in zip(item_ids, all_parsed)
         if p["dept_key"] == sel_dept
     ])
-    def _fmt_item_num(i):
-        p = _parse_item_id(i)
-        return f"Item #{p['item_num']}"
 
     sel_item_id = st.selectbox(
         "③ Item Number",
