@@ -153,7 +153,7 @@ with st.sidebar:
         format_func=lambda s: f"Store #{store_parsed_map.get(s, {}).get('store_num', '?')}  ({s})"
     )
 
-    st.divider()
+    st.markdown("---")
 
     # Item — 3 steps
     st.markdown("**Item**")
@@ -172,7 +172,7 @@ with st.sidebar:
         items_in_dept = sorted(item_parsed_map.keys())
     item = st.selectbox("③ Item Number", items_in_dept, format_func=_fmt_item_num)
 
-    st.divider()
+    st.markdown("---")
 
     forecast_days = st.slider("Forecast horizon (days)", min_value=7, max_value=90, value=28)
     model_choice  = st.selectbox("Model", ["Baseline", "LightGBM (trained)"])
