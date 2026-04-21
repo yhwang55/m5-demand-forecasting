@@ -4,12 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from lightgbm import LGBMRegressor
 
-# Ensure repo root is on PYTHONPATH for Streamlit Cloud
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
@@ -26,158 +24,91 @@ from src.data import (
 
 BUILD_VERSION = "2026-03-23-2145"
 
-# ── Category/Dept display helpers ──────────────────────────────────────────────
-CATEGORY_LABELS = {
-    "FOODS":     "🍎 Foods",
-    "HOBBIES":   "🎮 Hobbies",
-    "HOUSEHOLD": "🏠 Household",
-}
-
+STATE_LABELS = {"CA": "California", "TX": "Texas", "WI": "Wisconsin"}
+CATEGORY_LABELS = {"FOODS": "🍎 Foods", "HOBBIES": "🎮 Hobbies", "HOUSEHOLD": "🏠 Household"}
 DEPT_DESC = {
-    "FOODS_1":     "Produce & Deli",
-    "FOODS_2":     "Dry Goods",
-    "FOODS_3":     "Beverages & Snacks",
-    "HOBBIES_1":   "Toys & Games",
-    "HOBBIES_2":   "Crafts & Outdoors",
-    "HOUSEHOLD_1": "Cleaning & Paper",
-    "HOUSEHOLD_2": "Kitchen & Home",
-}
-
-STATE_LABELS = {
-    "CA": "California",
-    "TX": "Texas",
-    "WI": "Wisconsin",
+    "FOODS_1": "Produce & Deli", "FOODS_2": "Dry Goods", "FOODS_3": "Beverages & Snacks",
+    "HOBBIES_1": "Toys & Games", "HOBBIES_2": "Crafts & Outdoors",
+    "HOUSEHOLD_1": "Cleaning & Paper", "HOUSEHOLD_2": "Kitchen & Home",
 }
 
 def _parse_store_id(store_id: str) -> dict:
-    """Split CA_1 → {state, store_num}"""
     parts = store_id.split("_")
     if len(parts) == 2:
-        return dict(state=parts[0], store_num=parts[1])
-    return dict(state=store_id, store_num="?")
-
+        return {"state": parts[0], "store_num": parts[1]}
+    return {"state": store_id, "store_num": "?"}
 
 def _parse_item_id(item_id: str) -> dict:
-    """Split FOODS_1_001 → {category, dept_key, dept_num, item_num}"""
     parts = item_id.split("_")
     if len(parts) >= 3:
-        category  = parts[0]
-        dept_num  = parts[1]
-        item_num  = "_".join(parts[2:])
-        dept_key  = f"{category}_{dept_num}"
-        return dict(
-            category=category,
-            dept_num=dept_num,
-            dept_key=dept_key,
-            item_num=item_num,
-        )
-    return dict(category=item_id, dept_num="?", dept_key=item_id, item_num="?")
+        cat = parts[0]; dept_num = parts[1]
+        return {"category": cat, "dept_num": dept_num,
+                "dept_key": f"{cat}_{dept_num}", "item_num": "_".join(parts[2:])}
+    return {"category": item_id, "dept_num": "?", "dept_key": item_id, "item_num": "?"}
 
+def _fmt_dept(dk: str) -> str:
+    num = dk.split("_")[1] if "_" in dk else dk
+    desc = DEPT_DESC.get(dk, "")
+    return f"Dept {num}  —  {desc}" if desc else f"Dept {num}"
+
+def _fmt_item_num(item_id: str) -> str:
+    return f"Item #{_parse_item_id(item_id)['item_num']}"
+
+def _mask_secret(value) -> str:
+    if not value: return "(not set)"
+    if len(value) <= 4: return "***"
+    return f"{value[:2]}***{value[-2:]}"
+
+def _build_lag_features(series: pd.Series) -> pd.DataFrame:
+    df = pd.DataFrame({"sales": series})
+    df["lag_1"] = df["sales"].shift(1); df["lag_7"] = df["sales"].shift(7)
+    df["lag_14"] = df["sales"].shift(14); df["rolling_7"] = df["sales"].rolling(7).mean()
+    df["rolling_28"] = df["sales"].rolling(28).mean()
+    return df
+
+def _train_lightgbm_model(series: pd.Series):
+    features = _build_lag_features(series).dropna()
+    X = features.drop(columns=["sales"]); y = features["sales"]
+    model = LGBMRegressor(n_estimators=200, learning_rate=0.05, max_depth=-1,
+                          subsample=0.9, colsample_bytree=0.9, random_state=42)
+    model.fit(X, y)
+    return model, features
+
+def _forecast_lightgbm(model, history: pd.Series, horizon: int) -> pd.Series:
+    values = history.tolist(); preds = []
+    for _ in range(horizon):
+        window = pd.Series(values)
+        feat = _build_lag_features(window).iloc[-1]
+        X_next = feat.drop(labels=["sales"]).to_frame().T
+        p = float(model.predict(X_next)[0])
+        preds.append(p); values.append(p)
+    return pd.Series(preds)
 
 st.set_page_config(page_title="M5 Demand Forecasting", layout="wide")
 
-st.markdown(
-    '''
-    <style>
-        :root {
-            --primary: #1f77b4;
-            --accent: #ff7f0e;
-            --success: #2ca02c;
-            --bg-card: #f7f9fc;
-            --text-muted: #6b7280;
-        }
-        .kpi-card {
-            background: var(--bg-card);
-            border-radius: 12px;
-            padding: 16px 18px;
-            border: 1px solid rgba(31, 119, 180, 0.15);
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-        }
-        .kpi-card .kpi-title {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-        .kpi-card .kpi-value {
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: #0f172a;
-        }
-        .kpi-card .kpi-icon {
-            font-size: 1.6rem;
-            margin-right: 10px;
-        }
-        .kpi-row {
-            display: flex;
-            gap: 14px;
-        }
-        .kpi-highlight {
-            border-left: 4px solid var(--primary);
-        }
-        .kpi-accent {
-            border-left: 4px solid var(--accent);
-        }
-        .kpi-success {
-            border-left: 4px solid var(--success);
-        }
-        .section-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #0f172a;
-            margin: 10px 0 6px 0;
-        }
-        /* Item info card */
-        .item-info-card {
-            background: linear-gradient(135deg, #f0f7ff 0%, #fafafa 100%);
-            border: 1px solid rgba(31, 119, 180, 0.2);
-            border-radius: 12px;
-            padding: 14px 20px;
-            margin-bottom: 18px;
-            display: flex;
-            align-items: center;
-            gap: 18px;
-            flex-wrap: wrap;
-        }
-        .item-info-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: white;
-            border: 1px solid #dbeafe;
-            border-radius: 20px;
-            padding: 4px 14px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: #1e40af;
-        }
-        .item-info-label {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 600;
-        }
-        .item-info-value {
-            font-size: 0.95rem;
-            font-weight: 700;
-            color: #0f172a;
-        }
-        .item-info-section {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .item-info-divider {
-            color: #cbd5e1;
-            font-size: 1.2rem;
-        }
-    </style>
-    ''',
-    unsafe_allow_html=True,
-)
+st.markdown("""<style>
+:root { --primary:#1f77b4; --accent:#ff7f0e; --success:#2ca02c; --bg-card:#f7f9fc; --text-muted:#6b7280; }
+.kpi-card { background:var(--bg-card); border-radius:12px; padding:16px 18px;
+    border:1px solid rgba(31,119,180,.15); box-shadow:0 6px 18px rgba(15,23,42,.08); }
+.kpi-card .kpi-title { font-size:.85rem; color:var(--text-muted); margin-bottom:6px;
+    font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+.kpi-card .kpi-value { font-size:1.6rem; font-weight:700; color:#0f172a; }
+.kpi-highlight { border-left:4px solid var(--primary); }
+.kpi-accent    { border-left:4px solid var(--accent); }
+.kpi-success   { border-left:4px solid var(--success); }
+.info-card { background:linear-gradient(135deg,#f0f7ff 0%,#fafafa 100%);
+    border:1px solid rgba(31,119,180,.2); border-radius:12px;
+    padding:14px 20px; margin-bottom:18px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.info-badge { display:inline-flex; align-items:center; gap:6px; background:white;
+    border:1px solid #dbeafe; border-radius:20px; padding:4px 14px;
+    font-size:.85rem; font-weight:600; color:#1e40af; }
+.info-section { display:flex; flex-direction:column; gap:2px; }
+.info-label { font-size:.72rem; color:var(--text-muted); text-transform:uppercase;
+    letter-spacing:.05em; font-weight:600; }
+.info-value { font-size:.95rem; font-weight:700; color:#0f172a; }
+.info-divider { color:#cbd5e1; font-size:1.4rem; padding:0 4px; }
+</style>""", unsafe_allow_html=True)
 
 st.title("M5 Demand Forecasting MVP")
 st.caption("Portfolio demo: model selection, KPIs, and prediction overlay on sample data")
@@ -193,153 +124,50 @@ else:
     sales = load_sample_sales()
     prices = load_sample_prices()
     store_ids = sorted(sales["store_id"].unique())
-    item_ids = sorted(sales["item_id"].unique())
+    item_ids  = sorted(sales["item_id"].unique())
     st.info("Using sample dataset (Kaggle API key required for full data)")
 
 kaggle_username = os.getenv("KAGGLE_USERNAME")
-kaggle_key = os.getenv("KAGGLE_KEY")
-kaggle_status = get_kaggle_debug_status()
+kaggle_key      = os.getenv("KAGGLE_KEY")
+kaggle_status   = get_kaggle_debug_status()
 
+# Pre-parse all IDs into dicts — avoids re-parsing inside lambdas
+store_parsed_map = {s: _parse_store_id(s) for s in store_ids}
+item_parsed_map  = {i: _parse_item_id(i)  for i in item_ids}
 
-def _mask_secret(value: str | None) -> str:
-    if not value:
-        return "(not set)"
-    if len(value) <= 4:
-        return "***"
-    return f"{value[:2]}***{value[-2:] }"
-
-
-def _format_store(store_id: str) -> str:
-    if not store_id:
-        return "(unknown store)"
-    parts = store_id.split("_")
-    if len(parts) == 2:
-        state, store_num = parts
-        return f"{store_id}  (State: {state} · Store #{store_num})"
-    return store_id
-
-
-def _build_lag_features(series: pd.Series) -> pd.DataFrame:
-    df = pd.DataFrame({"sales": series})
-    df["lag_1"] = df["sales"].shift(1)
-    df["lag_7"] = df["sales"].shift(7)
-    df["lag_14"] = df["sales"].shift(14)
-    df["rolling_7"] = df["sales"].rolling(7).mean()
-    df["rolling_28"] = df["sales"].rolling(28).mean()
-    return df
-
-
-def _train_lightgbm_model(series: pd.Series) -> tuple[LGBMRegressor, pd.DataFrame]:
-    features = _build_lag_features(series).dropna()
-    X = features.drop(columns=["sales"])
-    y = features["sales"]
-    model = LGBMRegressor(
-        n_estimators=200,
-        learning_rate=0.05,
-        max_depth=-1,
-        subsample=0.9,
-        colsample_bytree=0.9,
-        random_state=42,
-    )
-    model.fit(X, y)
-    return model, features
-
-
-def _forecast_lightgbm(model: LGBMRegressor, history: pd.Series, horizon: int) -> pd.Series:
-    values = history.tolist()
-    preds = []
-    for _ in range(horizon):
-        window = pd.Series(values)
-        features = _build_lag_features(window).iloc[-1]
-        X_next = features.drop(labels=["sales"]).to_frame().T
-        next_pred = float(model.predict(X_next)[0])
-        preds.append(next_pred)
-        values.append(next_pred)
-    return pd.Series(preds)
-
-
-def _fmt_dept(dk: str) -> str:
-    num  = dk.split("_")[1] if "_" in dk else dk
-    desc = DEPT_DESC.get(dk, "")
-    return f"Dept {num}  —  {desc}" if desc else f"Dept {num}"
-
-
-def _fmt_item_num(i: str) -> str:
-    p = _parse_item_id(i)
-    return f"Item #{p['item_num']}"
-
-
-# ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filters")
 
-    # ── Hierarchical Store selector ─────────────────────────────────────────
+    # Store — 2 steps
     st.markdown("**Store**")
-
-    all_store_parsed = [_parse_store_id(s) for s in store_ids]
-
-    # Step 1 — State
-    states = sorted({p["state"] for p in all_store_parsed})
+    states = sorted({v["state"] for v in store_parsed_map.values()})
     sel_state = st.selectbox(
-        "① State",
-        states,
-        format_func=lambda s: f"{s}  —  {STATE_LABELS.get(s, s)}",
+        "① State", states,
+        format_func=lambda s: f"{s}  —  {STATE_LABELS.get(s, s)}"
     )
-
-    # Step 2 — Store number (filtered by state)
-    stores_in_state = sorted([
-        s for s, p in zip(store_ids, all_store_parsed)
-        if p["state"] == sel_state
-    ])
-    sel_store = st.selectbox(
-        "② Store",
-        stores_in_state,
-        format_func=lambda s: f"Store #{_parse_store_id(s)['store_num']}  ({s})",
+    stores_in_state = sorted([s for s, p in store_parsed_map.items() if p["state"] == sel_state])
+    store = st.selectbox(
+        "② Store", stores_in_state,
+        format_func=lambda s: f"Store #{store_parsed_map[s]['store_num']}  ({s})"
     )
-    store = sel_store
 
     st.divider()
 
-    # ── Hierarchical Item selector ──────────────────────────────────────────
+    # Item — 3 steps
     st.markdown("**Item**")
     st.caption("Item IDs follow the format `CATEGORY_DEPT_NUMBER` in the M5 dataset.")
-
-    # Step 1 — Category
-    all_parsed   = [_parse_item_id(i) for i in item_ids]
-    categories   = sorted({p["category"] for p in all_parsed})
-    cat_labels   = {c: CATEGORY_LABELS.get(c, c) for c in categories}
+    categories = sorted({v["category"] for v in item_parsed_map.values()})
     sel_category = st.selectbox(
-        "① Category",
-        categories,
-        format_func=lambda c: cat_labels[c],
+        "① Category", categories,
+        format_func=lambda c: CATEGORY_LABELS.get(c, c)
     )
-
-    # Step 2 — Department (filtered by category)
-    dept_keys_in_cat = sorted({
-        p["dept_key"] for p in all_parsed if p["category"] == sel_category
-    })
-    sel_dept = st.selectbox(
-        "② Department",
-        dept_keys_in_cat,
-        format_func=_fmt_dept,
-    )
-
-    # Step 3 — Item number (filtered by dept)
-    items_in_dept = sorted([
-        i for i, p in zip(item_ids, all_parsed)
-        if p["dept_key"] == sel_dept
-    ])
-
-    sel_item_id = st.selectbox(
-        "③ Item Number",
-        items_in_dept,
-        format_func=_fmt_item_num,
-    )
-
-    # Use the resolved item_id from here on
-    item = sel_item_id
+    depts_in_cat = sorted({v["dept_key"] for v in item_parsed_map.values() if v["category"] == sel_category})
+    sel_dept = st.selectbox("② Department", depts_in_cat, format_func=_fmt_dept)
+    items_in_dept = sorted([i for i, p in item_parsed_map.items() if p["dept_key"] == sel_dept])
+    item = st.selectbox("③ Item Number", items_in_dept, format_func=_fmt_item_num)
 
     st.divider()
+
     forecast_days = st.slider("Forecast horizon (days)", min_value=7, max_value=90, value=28)
     model_choice  = st.selectbox("Model", ["Baseline", "LightGBM (trained)"])
 
@@ -353,189 +181,106 @@ with st.sidebar:
         st.write("Required files present:", kaggle_status["required_files_present"])
         st.write("Last error:", kaggle_status["last_error"])
 
+# Info card
+sp = store_parsed_map[store]
+ip = item_parsed_map[item]
 
-# ── Selected item info card ────────────────────────────────────────────────────
-parsed     = _parse_item_id(item)
-cat_label  = CATEGORY_LABELS.get(parsed["category"], parsed["category"])
-dept_label = _fmt_dept(parsed["dept_key"])
-
-store_parsed = _parse_store_id(store)
-state_label  = STATE_LABELS.get(store_parsed["state"], store_parsed["state"])
-
-st.markdown(
-    f"""
-    <div class="item-info-card">
-        <div class="item-info-section">
-            <span class="item-info-label">Store</span>
-            <span class="item-info-value">{store}</span>
-        </div>
-        <div class="item-info-badge">📍 {store_parsed["state"]}  —  {state_label}</div>
-        <div class="item-info-section">
-            <span class="item-info-label">Store Number</span>
-            <span class="item-info-value">#{store_parsed["store_num"]}</span>
-        </div>
-        <span class="item-info-divider">|</span>
-        <div class="item-info-section">
-            <span class="item-info-label">Item</span>
-            <span class="item-info-value">{item}</span>
-        </div>
-        <div class="item-info-badge">{cat_label}</div>
-        <div class="item-info-section">
-            <span class="item-info-label">Department</span>
-            <span class="item-info-value">{dept_label}</span>
-        </div>
-        <div class="item-info-section">
-            <span class="item-info-label">Item Number</span>
-            <span class="item-info-value">#{parsed["item_num"]}</span>
-        </div>
+st.markdown(f"""
+<div class="info-card">
+    <div class="info-section">
+        <span class="info-label">Store</span>
+        <span class="info-value">{store}</span>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
+    <div class="info-badge">📍 {sp["state"]} — {STATE_LABELS.get(sp["state"], sp["state"])}</div>
+    <div class="info-section">
+        <span class="info-label">Store #</span>
+        <span class="info-value">{sp["store_num"]}</span>
+    </div>
+    <span class="info-divider">|</span>
+    <div class="info-section">
+        <span class="info-label">Item</span>
+        <span class="info-value">{item}</span>
+    </div>
+    <div class="info-badge">{CATEGORY_LABELS.get(ip["category"], ip["category"])}</div>
+    <div class="info-section">
+        <span class="info-label">Department</span>
+        <span class="info-value">{_fmt_dept(ip["dept_key"])}</span>
+    </div>
+    <div class="info-section">
+        <span class="info-label">Item #</span>
+        <span class="info-value">{ip["item_num"]}</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-
-# ── Data loading ───────────────────────────────────────────────────────────────
 if use_kaggle:
     filtered = load_kaggle_sales_for_item(store, item, last_n_days=730)
 else:
     filtered = sales[(sales["store_id"] == store) & (sales["item_id"] == item)].copy()
 
-filtered   = filtered.sort_values("date")
-price_row  = prices[(prices["store_id"] == store) & (prices["item_id"] == item)]
-price      = price_row["price"].iloc[0] if not price_row.empty else None
-
+filtered  = filtered.sort_values("date")
+price_row = prices[(prices["store_id"] == store) & (prices["item_id"] == item)]
+price     = price_row["price"].iloc[0] if not price_row.empty else None
 filtered["prediction"] = np.nan
 
 if not filtered.empty:
     sales_series = filtered["sales"].astype(float).reset_index(drop=True)
-
     if model_choice == "Baseline":
         filtered["prediction"] = sales_series.expanding().mean()
-        baseline_forecast = float(filtered["prediction"].iloc[-1])
-        forecast_values = pd.Series([baseline_forecast] * forecast_days)
+        forecast_values = pd.Series([float(filtered["prediction"].iloc[-1])] * forecast_days)
     else:
-        model, features = _train_lightgbm_model(sales_series)
-        in_sample_preds = model.predict(features.drop(columns=["sales"])).astype(float)
-        filtered.loc[features.index, "prediction"] = in_sample_preds
-        forecast_values = _forecast_lightgbm(model, sales_series, forecast_days)
+        lgbm_model, features = _train_lightgbm_model(sales_series)
+        filtered.loc[features.index, "prediction"] = lgbm_model.predict(features.drop(columns=["sales"])).astype(float)
+        forecast_values = _forecast_lightgbm(lgbm_model, sales_series, forecast_days)
 
     last_date    = pd.to_datetime(filtered["date"].iloc[-1])
     future_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=forecast_days, freq="D")
-    forecast_df  = pd.DataFrame(
-        {
-            "date":       future_dates,
-            "sales":      np.nan,
-            "prediction": forecast_values.values,
-        }
-    )
-
-    plot_history              = filtered[["date", "sales"]].copy()
-    plot_history["sales"]     = plot_history["sales"].astype(float)
-    plot_history["prediction"]= np.nan
-
+    forecast_df  = pd.DataFrame({"date": future_dates, "sales": np.nan, "prediction": forecast_values.values})
+    plot_history = filtered[["date", "sales"]].copy()
+    plot_history["sales"] = plot_history["sales"].astype(float)
+    plot_history["prediction"] = np.nan
     plot_data = pd.concat([plot_history, forecast_df], ignore_index=True)
 else:
     plot_data = filtered[["date", "sales"]]
 
-avg_sales    = float(filtered["sales"].mean()) if not filtered.empty else 0.0
+avg_sales    = float(filtered["sales"].mean())    if not filtered.empty else 0.0
 latest_sales = float(filtered["sales"].iloc[-1]) if not filtered.empty else 0.0
-mae = (
-    float((filtered["sales"] - filtered["prediction"]).abs().mean())
-    if not filtered.empty
-    else 0.0
-)
+mae          = float((filtered["sales"] - filtered["prediction"]).abs().mean()) if not filtered.empty else 0.0
 
-# ── KPI cards ─────────────────────────────────────────────────────────────────
 kpi_cols = st.columns(4)
+kpi_cols[0].markdown(f'<div class="kpi-card kpi-highlight"><div class="kpi-title">Price</div><div class="kpi-value">{price if price is not None else 0}</div></div>', unsafe_allow_html=True)
+kpi_cols[1].markdown(f'<div class="kpi-card kpi-accent"><div class="kpi-title">Avg Sales</div><div class="kpi-value">{avg_sales:,.1f}</div></div>', unsafe_allow_html=True)
+kpi_cols[2].markdown(f'<div class="kpi-card kpi-highlight"><div class="kpi-title">Latest Sales</div><div class="kpi-value">{latest_sales:,.1f}</div></div>', unsafe_allow_html=True)
+kpi_cols[3].markdown(f'<div class="kpi-card kpi-success"><div class="kpi-title">Prediction MAE</div><div class="kpi-value">{mae:,.2f}</div></div>', unsafe_allow_html=True)
 
-kpi_cols[0].markdown(
-    f"""
-    <div class="kpi-card kpi-highlight">
-        <div class="kpi-title">Price</div>
-        <div class="kpi-value">{price if price is not None else 0}</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-kpi_cols[1].markdown(
-    f"""
-    <div class="kpi-card kpi-accent">
-        <div class="kpi-title">Avg Sales</div>
-        <div class="kpi-value">{avg_sales:,.1f}</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-kpi_cols[2].markdown(
-    f"""
-    <div class="kpi-card kpi-highlight">
-        <div class="kpi-title">Latest Sales</div>
-        <div class="kpi-value">{latest_sales:,.1f}</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-kpi_cols[3].markdown(
-    f"""
-    <div class="kpi-card kpi-success">
-        <div class="kpi-title">Prediction MAE</div>
-        <div class="kpi-value">{mae:,.2f}</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ── Chart ──────────────────────────────────────────────────────────────────────
 st.markdown("### Sales Forecast View")
-
-history_series         = filtered[["date", "sales"]].copy()
-history_series["sales"]= pd.to_numeric(history_series["sales"], errors="coerce")
-history_series         = history_series.dropna(subset=["sales"])
+history_series = filtered[["date", "sales"]].copy()
+history_series["sales"] = pd.to_numeric(history_series["sales"], errors="coerce")
+history_series = history_series.dropna(subset=["sales"])
 
 if history_series.empty:
     st.warning("No non-null sales values to plot for the selected store/item.")
 
 fig = go.Figure()
 if not history_series.empty:
-    fig.add_trace(
-        go.Scatter(
-            x=history_series["date"],
-            y=history_series["sales"],
-            mode="markers",
-            name="sales",
-            marker=dict(size=6, color="#1f77b4"),
-        )
-    )
-
-fig.update_layout(
-    title="Actual Sales",
-    template="plotly_white",
-    hovermode="x unified",
-    legend_title_text="",
-    xaxis_title="",
-    yaxis_title="Sales",
+    fig.add_trace(go.Scatter(x=history_series["date"], y=history_series["sales"],
+        mode="markers", name="sales", marker=dict(size=6, color="#1f77b4")))
+fig.update_layout(title="Actual Sales", template="plotly_white", hovermode="x unified",
+    legend_title_text="", xaxis_title="", yaxis_title="Sales",
     margin=dict(l=10, r=10, t=40, b=10),
-    plot_bgcolor="rgba(0,0,0,0)",
-    paper_bgcolor="rgba(0,0,0,0)",
-)
-fig.update_xaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)")
-fig.update_yaxes(showgrid=True, gridcolor="rgba(15, 23, 42, 0.08)", zeroline=False)
-
+    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+fig.update_xaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)")
+fig.update_yaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)", zeroline=False)
 st.plotly_chart(fig, use_container_width=True)
 
-# ── Expanders ─────────────────────────────────────────────────────────────────
 with st.expander("Model Summary"):
-    st.markdown(
-        """
-        **Baseline**: Expanding mean of historical sales + flat future forecast.
-        **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.
-        *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
-        """
-    )
+    st.markdown("""
+    **Baseline**: Expanding mean of historical sales + flat future forecast.
+    **LightGBM (trained)**: Lightweight lag/rolling features trained on selected series and used for recursive forecasting.
+    *Note: This is a fast demo model; replace with production training pipeline for higher accuracy.*
+    """)
 
 with st.expander("Data Snapshot"):
-    snapshot = filtered.head(10).copy()
-    snapshot = snapshot.astype(str)
-    st.markdown(snapshot.to_html(index=False), unsafe_allow_html=True)
+    st.markdown(filtered.head(10).copy().astype(str).to_html(index=False), unsafe_allow_html=True)
 
 st.caption("MVP: Filter + Actual vs Prediction + KPIs + Summary")
