@@ -310,6 +310,15 @@ with st.expander("Model Summary"):
     """)
 
 with st.expander("Data Snapshot"):
-    st.markdown(filtered.head(10).copy().astype(str).to_html(index=False), unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Date range & sales stats**")
+        if not filtered.empty:
+            st.write(f"Rows: {len(filtered)}")
+            st.write(f"Date range: {filtered['date'].min().date()} → {filtered['date'].max().date()}")
+            st.write(filtered["sales"].describe().round(2))
+    with col2:
+        st.markdown("**Sample rows (last 10)**")
+        st.markdown(filtered.tail(10).copy().astype(str).to_html(index=False), unsafe_allow_html=True)
 
 st.caption("MVP: Filter + Actual vs Prediction + KPIs + Summary")
