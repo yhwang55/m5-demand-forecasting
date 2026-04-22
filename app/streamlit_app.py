@@ -17,6 +17,7 @@ from src.data import (
     get_kaggle_debug_status,
     load_kaggle_prices_latest,
     load_kaggle_sales_for_item,
+    load_kaggle_store_daily_sales,
     load_kaggle_store_item_index,
     load_sample_prices,
     load_sample_sales,
@@ -260,52 +261,77 @@ kpi_cols[2].markdown(f'<div class="kpi-card kpi-highlight"><div class="kpi-title
 kpi_cols[3].markdown(f'<div class="kpi-card kpi-success"><div class="kpi-title">Prediction MAE</div><div class="kpi-value">{mae:,.2f}</div></div>', unsafe_allow_html=True)
 
 st.markdown("### Sales Forecast View")
+
+# ── Chart 1: Store-level daily total sales ─────────────────────────────────────
+st.markdown(f"#### 📦 Store {store} — Daily Total Sales (All Items)")
+if use_kaggle:
+    store_daily = load_kaggle_store_daily_sales(store, last_n_days=730)
+else:
+    store_daily = (
+        sales[sales["store_id"] == store]
+        .groupby("date")["sales"].sum()
+        .reset_index()
+        .sort_values("date")
+    )
+
+fig_store = go.Figure()
+if not store_daily.empty:
+    fig_store.add_trace(go.Scatter(
+        x=store_daily["date"], y=store_daily["sales"],
+        mode="lines", name="Daily Total Sales",
+        line=dict(color="#1f77b4", width=1.5),
+        fill="tozeroy", fillcolor="rgba(31,119,180,0.08)",
+    ))
+fig_store.update_layout(
+    template="plotly_white", hovermode="x unified",
+    xaxis_title="", yaxis_title="Units Sold",
+    margin=dict(l=10, r=10, t=20, b=10),
+    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+)
+fig_store.update_xaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)")
+fig_store.update_yaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)", zeroline=False)
+st.plotly_chart(fig_store, use_container_width=True)
+
+# ── Chart 2: Item-level prediction overlay ─────────────────────────────────────
+st.markdown(f"#### 🔍 Item {item} — Forecast ({model_choice})")
 history_series = filtered[["date", "sales"]].copy()
 history_series["sales"] = pd.to_numeric(history_series["sales"], errors="coerce")
 history_series = history_series.dropna(subset=["sales"])
 
 if history_series.empty:
-    st.warning("No non-null sales values to plot for the selected store/item.")
+    st.warning("No non-null sales values to plot for the selected item.")
 
-fig = go.Figure()
-
-# Actual sales (scatter)
+fig_item = go.Figure()
 if not history_series.empty:
-    fig.add_trace(go.Scatter(
+    fig_item.add_trace(go.Scatter(
         x=history_series["date"], y=history_series["sales"],
         mode="markers", name="Actual Sales",
         marker=dict(size=4, color="#1f77b4", opacity=0.6),
     ))
-
-# In-sample prediction + forecast overlay
 if not filtered.empty and "prediction" in filtered.columns:
     pred_series = filtered[["date", "prediction"]].dropna(subset=["prediction"])
     if not pred_series.empty:
-        fig.add_trace(go.Scatter(
+        fig_item.add_trace(go.Scatter(
             x=pred_series["date"], y=pred_series["prediction"],
             mode="lines", name=f"{model_choice} (in-sample)",
             line=dict(color="#ff7f0e", width=2),
         ))
-
-# Future forecast
 if not forecast_df.empty:
-    fig.add_trace(go.Scatter(
+    fig_item.add_trace(go.Scatter(
         x=forecast_df["date"], y=forecast_df["prediction"],
         mode="lines", name="Forecast",
         line=dict(color="#ff7f0e", width=2, dash="dash"),
     ))
-
-fig.update_layout(
-    title=f"Actual Sales vs {model_choice} Prediction",
+fig_item.update_layout(
     template="plotly_white", hovermode="x unified",
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    xaxis_title="", yaxis_title="Sales",
-    margin=dict(l=10, r=10, t=50, b=10),
+    xaxis_title="", yaxis_title="Units Sold",
+    margin=dict(l=10, r=10, t=30, b=10),
     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
 )
-fig.update_xaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)")
-fig.update_yaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)", zeroline=False)
-st.plotly_chart(fig, use_container_width=True)
+fig_item.update_xaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)")
+fig_item.update_yaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)", zeroline=False)
+st.plotly_chart(fig_item, use_container_width=True)
 
 with st.expander("Model Summary"):
     st.markdown("""
