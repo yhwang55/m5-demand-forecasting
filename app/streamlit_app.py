@@ -228,6 +228,7 @@ filtered  = filtered.sort_values("date")
 price_row = prices[(prices["store_id"] == store) & (prices["item_id"] == item)]
 price     = price_row["price"].iloc[0] if not price_row.empty else None
 filtered["prediction"] = np.nan
+forecast_df = pd.DataFrame()
 
 if not filtered.empty:
     sales_series = filtered["sales"].astype(float).reset_index(drop=True)
@@ -242,12 +243,6 @@ if not filtered.empty:
     last_date    = pd.to_datetime(filtered["date"].iloc[-1])
     future_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=forecast_days, freq="D")
     forecast_df  = pd.DataFrame({"date": future_dates, "sales": np.nan, "prediction": forecast_values.values})
-    plot_history = filtered[["date", "sales"]].copy()
-    plot_history["sales"] = plot_history["sales"].astype(float)
-    plot_history["prediction"] = np.nan
-    plot_data = pd.concat([plot_history, forecast_df], ignore_index=True)
-else:
-    plot_data = filtered[["date", "sales"]]
 
 avg_sales    = float(filtered["sales"].mean())    if not filtered.empty else 0.0
 latest_sales = float(filtered["sales"].iloc[-1]) if not filtered.empty else 0.0
@@ -268,13 +263,41 @@ if history_series.empty:
     st.warning("No non-null sales values to plot for the selected store/item.")
 
 fig = go.Figure()
+
+# Actual sales (scatter)
 if not history_series.empty:
-    fig.add_trace(go.Scatter(x=history_series["date"], y=history_series["sales"],
-        mode="markers", name="sales", marker=dict(size=6, color="#1f77b4")))
-fig.update_layout(title="Actual Sales", template="plotly_white", hovermode="x unified",
-    legend_title_text="", xaxis_title="", yaxis_title="Sales",
-    margin=dict(l=10, r=10, t=40, b=10),
-    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+    fig.add_trace(go.Scatter(
+        x=history_series["date"], y=history_series["sales"],
+        mode="markers", name="Actual Sales",
+        marker=dict(size=4, color="#1f77b4", opacity=0.6),
+    ))
+
+# In-sample prediction + forecast overlay
+if not filtered.empty and "prediction" in filtered.columns:
+    pred_series = filtered[["date", "prediction"]].dropna(subset=["prediction"])
+    if not pred_series.empty:
+        fig.add_trace(go.Scatter(
+            x=pred_series["date"], y=pred_series["prediction"],
+            mode="lines", name=f"{model_choice} (in-sample)",
+            line=dict(color="#ff7f0e", width=2),
+        ))
+
+# Future forecast
+if not forecast_df.empty:
+    fig.add_trace(go.Scatter(
+        x=forecast_df["date"], y=forecast_df["prediction"],
+        mode="lines", name="Forecast",
+        line=dict(color="#ff7f0e", width=2, dash="dash"),
+    ))
+
+fig.update_layout(
+    title=f"Actual Sales vs {model_choice} Prediction",
+    template="plotly_white", hovermode="x unified",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    xaxis_title="", yaxis_title="Sales",
+    margin=dict(l=10, r=10, t=50, b=10),
+    plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+)
 fig.update_xaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)")
 fig.update_yaxes(showgrid=True, gridcolor="rgba(15,23,42,.08)", zeroline=False)
 st.plotly_chart(fig, use_container_width=True)
