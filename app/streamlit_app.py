@@ -231,13 +231,18 @@ filtered["prediction"] = np.nan
 forecast_df = pd.DataFrame()
 
 if not filtered.empty:
-    sales_series = filtered["sales"].astype(float).reset_index(drop=True)
+    # reset_index so lag features align with filtered positionally
+    filtered = filtered.reset_index(drop=True)
+    sales_series = filtered["sales"].astype(float)
+
     if model_choice == "Baseline":
         filtered["prediction"] = sales_series.expanding().mean()
         forecast_values = pd.Series([float(filtered["prediction"].iloc[-1])] * forecast_days)
     else:
         lgbm_model, features = _train_lightgbm_model(sales_series)
-        filtered.loc[features.index, "prediction"] = lgbm_model.predict(features.drop(columns=["sales"])).astype(float)
+        # features.index is 0-based after dropna; assign positionally
+        preds = lgbm_model.predict(features.drop(columns=["sales"])).astype(float)
+        filtered.loc[features.index, "prediction"] = preds
         forecast_values = _forecast_lightgbm(lgbm_model, sales_series, forecast_days)
 
     last_date    = pd.to_datetime(filtered["date"].iloc[-1])
