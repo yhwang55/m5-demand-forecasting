@@ -149,3 +149,32 @@ def load_kaggle_sales_for_item(store_id: str, item_id: str, last_n_days=365):
     merged = melted.merge(calendar, on="d", how="left")
     merged["date"] = pd.to_datetime(merged["date"])
     return merged[["store_id", "item_id", "date", "sales"]]
+
+
+def load_kaggle_store_daily_sales(store_id: str, last_n_days: int = 730) -> pd.DataFrame:
+    """Return daily total sales aggregated across all items for a given store."""
+    columns = pd.read_csv(
+        KAGGLE_DATA_DIR / "sales_train_validation.csv",
+        nrows=0,
+    ).columns
+    d_cols = [col for col in columns if col.startswith("d_")]
+    if last_n_days and last_n_days < len(d_cols):
+        d_cols = d_cols[-last_n_days:]
+    usecols = ["store_id"] + d_cols
+ 
+    sales = pd.read_csv(
+        KAGGLE_DATA_DIR / "sales_train_validation.csv",
+        usecols=usecols,
+    )
+    filtered = sales[sales["store_id"] == store_id]
+    if filtered.empty:
+        return pd.DataFrame(columns=["date", "sales"])
+ 
+    # Sum across all items for each day
+    daily = filtered[d_cols].sum(axis=0).reset_index()
+    daily.columns = ["d", "sales"]
+ 
+    calendar = pd.read_csv(KAGGLE_DATA_DIR / "calendar.csv", usecols=["d", "date"])
+    merged = daily.merge(calendar, on="d", how="left")
+    merged["date"] = pd.to_datetime(merged["date"])
+    return merged[["date", "sales"]].sort_values("date").reset_index(drop=True)
